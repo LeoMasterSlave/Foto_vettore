@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Fotovettore: converte una foto in disegno vettoriale (SVG, DXF, PDF) direttamente nel browser.">
+<title>Fotovettore</title>
+<style>
+/* Layout: a drafting sheet. Large preview with a title block underneath, tool panel at its side. */
+:root {
+  --paper: #ECEFF2;
+  --sheet: #F8F9FB;
+  --canvas: #FFFFFF;
+  --grid: rgba(21, 32, 43, 0.06);
+  --ink: #15202B;
+  --muted: #5A6672;
+  --line: #C8D0D8;
+  --accent: #C93F0B;
+  --accent-ink: #FFFFFF;
+  --font-display: "Arial Narrow", "Helvetica Neue", "Roboto Condensed", sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0D141B;
+    --sheet: #131C25;
+    --canvas: #0A1015;
+    --grid: rgba(230, 236, 241, 0.06);
+    --ink: #E6ECF1;
+    --muted: #93A0AC;
+    --line: #2A3641;
+    --accent: #FF7A3D;
+    --accent-ink: #1A0E06;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0D141B;
+  --sheet: #131C25;
+  --canvas: #0A1015;
+  --grid: rgba(230, 236, 241, 0.06);
+  --ink: #E6ECF1;
+  --muted: #93A0AC;
+  --line: #2A3641;
+  --accent: #FF7A3D;
+  --accent-ink: #1A0E06;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  margin: 0;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 34px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1;
+}
+.tag { margin: 0; color: var(--muted); max-width: 60ch; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (min-width: 880px) { .app { grid-template-columns: minmax(0, 1fr) 330px; } }
+
+.stage { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.viewbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--sheet); }
+.seg button {
+  font: 500 13px var(--font-body);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 7px 13px;
+  cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.fname { font: 400 12px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+
+.dropzone {
+  position: relative;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  justify-content: center;
+}
+.frame {
+  --ar: 1.5;
+  position: relative;
+  width: min(100%, calc(68vh * var(--ar)));
+  aspect-ratio: var(--ar);
+  background-color: var(--canvas);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  outline: 1px solid var(--line);
+}
+.vpwrap { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+.frame { overflow: hidden; }
+.frame.zoomed { cursor: grab; touch-action: none; }
+.zoom { display: inline-flex; gap: 6px; align-items: center; }
+.zoom button { font: 500 13px var(--font-body); border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.zoom button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.zoom span { font: 400 12px var(--font-mono); color: var(--muted); min-width: 3.6em; text-align: right; font-variant-numeric: tabular-nums; }
+.frame canvas, .frame svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.frame svg { color: var(--ink); }
+.frame[data-view="orig"] svg { display: none; }
+.frame[data-view="vector"] canvas { display: none; }
+.frame[data-view="overlay"] canvas { opacity: 0.4; }
+.frame[data-view="overlay"] svg { color: var(--accent); }
+.busy {
+  position: absolute; right: 22px; top: 22px;
+  font: 500 12px var(--font-mono);
+  background: var(--ink); color: var(--paper);
+  padding: 4px 9px; border-radius: 4px;
+}
+.dropfx {
+  position: fixed; inset: 0; z-index: 20;
+  display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  border: 3px dashed var(--accent);
+  font: 600 28px var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.dropfx.on { display: flex; }
+
+.titleblock {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin: 0;
+  border: 1px solid var(--ink);
+  background: var(--sheet);
+}
+.titleblock > div { padding: 8px 12px 9px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.titleblock dt { font: 500 11px var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-size: 13px; }
+.titleblock dd { margin: 2px 0 0; font: 500 15px var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.panel {
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 18px;
+  min-width: 0;
+}
+.panel h2 {
+  font: 600 15px var(--font-display);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  margin: 0 0 8px; color: var(--muted);
+}
+.btn {
+  font: 600 14px var(--font-body);
+  border: 1px solid var(--ink);
+  background: transparent; color: var(--ink);
+  padding: 10px 14px; border-radius: 6px; cursor: pointer;
+}
+.btn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field:last-child { margin-bottom: 0; }
+.field label, .field .lab { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 500; }
+.field output { font: 400 13px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+input[type="number"] {
+  font: 500 14px var(--font-mono); width: 100%;
+  background: var(--canvas); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+}
+.exports { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.exports .wide { grid-column: 1 / -1; }
+.status { min-height: 1.4em; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.seg.full { display: flex; }
+.seg.full button { flex: 1; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Fotovettore</h1>
+    <p class="tag">Trasforma una foto in disegno vettoriale per CAD, laser e CNC. Gratis, e l'immagine non lascia il tuo dispositivo.</p>
+  </header>
+
+  <main class="app">
+    <section class="stage" aria-label="Anteprima">
+      <div class="viewbar">
+        <div class="seg" role="group" aria-label="Vista">
+          <button type="button" data-view="vector" aria-pressed="true">Vettore</button>
+          <button type="button" data-view="orig" aria-pressed="false">Originale</button>
+          <button type="button" data-view="overlay" aria-pressed="false">Sovrapposto</button>
+        </div>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button type="button" id="zout" aria-label="Riduci">−</button>
+          <button type="button" id="zin" aria-label="Ingrandisci">+</button>
+          <button type="button" id="zfit">Adatta</button>
+          <span id="zlabel">100%</span>
+        </div>
+        <span class="fname" id="fname">esempio-tempio.png</span>
+      </div>
+
+      <div class="dropzone">
+        <div class="frame" id="frame" data-view="vector">
+          <div class="vpwrap" id="vpwrap">
+          <canvas id="orig" aria-label="Immagine originale"></canvas>
+          <svg id="vec" viewBox="0 0 1200 800" preserveAspectRatio="none" role="img" aria-label="Disegno vettoriale">
+            <path id="vp" fill="none" stroke="currentColor" stroke-width="1.3" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"></path>
+          </svg>
+          </div>
+        </div>
+        <div class="busy" id="busy" hidden>Elaboro…</div>
+      </div>
+
+      <dl class="titleblock">
+        <div><dt>Dimensioni</dt><dd id="tb-size">-</dd></div>
+        <div><dt>Polilinee</dt><dd id="tb-paths">-</dd></div>
+        <div><dt>Vertici</dt><dd id="tb-pts">-</dd></div>
+        <div><dt>Entità</dt><dd id="tb-ent">-</dd></div>
+        <div><dt>Lunghezza taglio</dt><dd id="tb-len">-</dd></div>
+      </dl>
+    </section>
+
+    <aside class="panel" aria-label="Impostazioni">
+      <div>
+        <button class="btn primary" id="pick" type="button" style="width:100%">Carica un'immagine</button>
+        <input id="file" type="file" accept="image/*" hidden>
+        <p class="hint">Oppure trascinala nella pagina o incollala (Ctrl/Cmd+V). JPG, PNG, WebP, AVIF, GIF.</p>
+      </div>
+
+      <div>
+        <h2>Metodo</h2>
+        <div class="seg full" role="group" aria-label="Metodo">
+          <button type="button" data-mode="edges" aria-pressed="false">Contorni</button>
+          <button type="button" data-mode="arch" aria-pressed="true">Architettura</button>
+          <button type="button" data-mode="shape" aria-pressed="false">Sagoma</button>
+        </div>
+        <p class="hint" id="modehint">Linee sottili lungo i bordi dell'immagine, come un disegno al tratto.</p>
+      </div>
+
+      <div>
+        <h2>Regolazioni</h2>
+        <div class="field" id="f-sens">
+          <label for="sens">Sensibilità <output id="o-sens"></output></label>
+          <input id="sens" type="range" min="0" max="100" value="55">
+        </div>
+        <div id="f-shape" hidden>
+          <label class="check"><input id="auto" type="checkbox" checked> Soglia automatica</label>
+          <div class="field">
+            <label for="thr">Soglia di luminosità <output id="o-thr"></output></label>
+            <input id="thr" type="range" min="5" max="250" value="128" disabled>
+          </div>
+          <label class="check"><input id="inv" type="checkbox"> Inverti (sagome chiare su sfondo scuro)</label>
+        </div>
+        <div class="field">
+          <label for="blur">Levigatura <output id="o-blur"></output></label>
+          <input id="blur" type="range" min="0" max="40" value="12">
+        </div>
+        <div class="field">
+          <label for="simp">Semplificazione <output id="o-simp"></output></label>
+          <input id="simp" type="range" min="0" max="40" value="10">
+        </div>
+        <div class="field">
+          <label for="minlen">Elimina tratti corti <output id="o-min"></output></label>
+          <input id="minlen" type="range" min="0" max="120" value="14">
+        </div>
+        <div class="field">
+          <label for="merge">Unisci linee <output id="o-merge"></output></label>
+          <input id="merge" type="range" min="0" max="80" value="30">
+        </div>
+        <label class="check"><input id="arcs" type="checkbox" checked> Riconosci archi</label>
+        <label class="check"><input id="straight" type="checkbox" checked> Raddrizza orizzontali e verticali</label>
+      </div>
+
+      <div>
+        <h2>Misura reale</h2>
+        <div class="field">
+          <label for="wmm">Larghezza del disegno (mm)</label>
+          <input id="wmm" type="number" min="1" max="100000" step="1" value="200" inputmode="decimal">
+        </div>
+      </div>
+
+      <div>
+        <h2>Esporta</h2>
+        <div class="exports">
+          <button class="btn" id="ex-svg" type="button">SVG</button>
+          <button class="btn" id="ex-dxf" type="button">DXF</button>
+          <button class="btn" id="ex-pdf" type="button">PDF</button>
+          <button class="btn wide" id="ex-copy" type="button">Copia il DXF negli appunti</button>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </div>
+    </aside>
+  </main>
+</div>
+<div class="dropfx" id="dropfx">Rilascia l'immagine</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const S = { W: 0, H: 0, gray: null, gen: 0, paths: [], info: {}, mode: 'arch', name: '' };
+
+  /* ---------- utilities ---------- */
+  const fmtInt = (n) => n.toLocaleString('it-IT');
+  const fmt1 = (n) => n.toLocaleString('it-IT', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  let statusTimer;
+  function say(msg) {
+    $('status').textContent = msg;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => { $('status').textContent = ''; }, 7000);
+  }
+
+  /* ---------- image loading ---------- */
+  function setSource(el, name) {
+    const w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+    const s = Math.min(1, 1400 / Math.max(w, h));
+    const W = Math.max(8, Math.round(w * s)), H = Math.max(8, Math.round(h * s));
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+    x.drawImage(el, 0, 0, W, H);
+    const d = x.getImageData(0, 0, W, H).data;
+    const g = new Float32Array(W * H);
+    for (let i = 0, p = 0; i < g.length; i++, p += 4) g[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+    S.W = W; S.H = H; S.gray = g; S.name = name; S.gen++;
+    const o = $('orig');
+    o.width = W; o.height = H;
+    o.getContext('2d').drawImage(c, 0, 0);
+    $('frame').style.setProperty('--ar', (W / H).toFixed(4));
+    $('vec').setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    $('fname').textContent = name;
+    View.k = 1; View.x = 0; View.y = 0; applyView();
+    sendImage();
+    request();
+  }
+  function loadFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { say('Questo file non è un\'immagine. Per i PDF, esporta prima una pagina come immagine.'); return; }
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => { setSource(im, file.name || 'immagine'); URL.revokeObjectURL(url); };
+    im.onerror = () => { say('Il browser non riesce ad aprire questo formato. Prova con JPG, PNG o WebP.'); URL.revokeObjectURL(url); };
+    im.src = url;
+  }
+
+  function makeSample() {
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 800;
+    const x = c.getContext('2d');
+    let g = x.createLinearGradient(0, 0, 0, 800);
+    g.addColorStop(0, '#eef1f3'); g.addColorStop(1, '#cdd4da');
+    x.fillStyle = g; x.fillRect(0, 0, 1200, 800);
+    x.fillStyle = '#bdb6aa'; x.fillRect(0, 700, 1200, 100);
+    x.lineJoin = 'round';
+    const stroke = (w = 3) => { x.strokeStyle = '#3d3b37'; x.lineWidth = w; x.stroke(); };
+    // steps
+    for (let i = 0; i < 3; i++) {
+      x.fillStyle = ['#a8a297', '#bcb6aa', '#cfc9bd'][i];
+      x.beginPath(); x.rect(100 + i * 30, 700 - (i + 1) * 24, 1000 - i * 60, 24); x.fill(); stroke(2.5);
+    }
+    // columns
+    const base = 628, top = 258, n = 6;
+    for (let k = 0; k < n; k++) {
+      const cx = 190 + k * (820 / (n - 1));
+      const cg = x.createLinearGradient(cx - 36, 0, cx + 36, 0);
+      cg.addColorStop(0, '#8d8a82'); cg.addColorStop(0.35, '#efece4'); cg.addColorStop(0.7, '#cdcac1'); cg.addColorStop(1, '#7f7c74');
+      x.fillStyle = cg;
+      x.beginPath(); x.moveTo(cx - 36, base); x.lineTo(cx - 31, top); x.lineTo(cx + 31, top); x.lineTo(cx + 36, base); x.closePath(); x.fill(); stroke(2.5);
+      x.strokeStyle = 'rgba(61,59,55,.55)'; x.lineWidth = 1.5;
+      for (let f = -2; f <= 2; f++) { x.beginPath(); x.moveTo(cx + f * 12, base); x.lineTo(cx + f * 11.2, top); x.stroke(); }
+      x.fillStyle = '#d9d5cb';
+      x.beginPath(); x.rect(cx - 46, top - 18, 92, 18); x.fill(); stroke(2.5);
+      x.beginPath(); x.rect(cx - 40, base, 80, 12); x.fillStyle = '#c4bfb3'; x.fill(); stroke(2.5);
+    }
+    // entablature
+    x.fillStyle = '#d3cec3'; x.beginPath(); x.rect(120, 216, 960, 24); x.fill(); stroke(3);
+    x.fillStyle = '#e1ddd3'; x.beginPath(); x.rect(120, 186, 960, 30); x.fill(); stroke(3);
+    x.strokeStyle = '#3d3b37'; x.lineWidth = 2;
+    for (let t = 0; t < 22; t++) { const tx = 150 + t * 42; x.strokeRect(tx, 192, 14, 18); }
+    x.fillStyle = '#cbc6ba'; x.beginPath(); x.rect(100, 164, 1000, 22); x.fill(); stroke(3);
+    // pediment
+    x.fillStyle = '#ddd9cf'; x.beginPath(); x.moveTo(90, 164); x.lineTo(1110, 164); x.lineTo(600, 34); x.closePath(); x.fill(); stroke(3.5);
+    x.fillStyle = '#9f9b91'; x.beginPath(); x.moveTo(220, 150); x.lineTo(980, 150); x.lineTo(600, 62); x.closePath(); x.fill(); stroke(2.5);
+    return c;
+  }
+
+
+
+  /* ======================================================================
+     Motore di vettorializzazione. Funzione autonoma: gira in un Web Worker
+     (o nel thread principale se il browser non lo permette).
+     ====================================================================== */
+  function makeEngine() {
+    let IMG = null, PRE = { key: '', g: null };
+    function setImage(W, H, gray) { IMG = { W, H, gray }; PRE = { key: '', g: null }; }
+
+  /* ---------- image processing ---------- */
+  function gaussBlur(src, W, H, sigma) {
+    if (sigma < 0.3) return Float32Array.from(src);
+    const r = Math.ceil(sigma * 3), k = new Float32Array(2 * r + 1);
+    let sum = 0;
+    for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + r]; }
+    for (let i = 0; i < k.length; i++) k[i] /= sum;
+    const tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        let a = 0;
+        for (let i = -r; i <= r; i++) { let xx = x + i; xx = xx < 0 ? 0 : xx >= W ? W - 1 : xx; a += src[row + xx] * k[i + r]; }
+        tmp[row + x] = a;
+      }
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let a = 0;
+        for (let i = -r; i <= r; i++) { let yy = y + i; yy = yy < 0 ? 0 : yy >= H ? H - 1 : yy; a += tmp[yy * W + x] * k[i + r]; }
+        out[y * W + x] = a;
+      }
+    }
+    return out;
+  }
+
+  function otsu(g) {
+    const h = new Float64Array(256);
+    for (let i = 0; i < g.length; i++) { let v = Math.round(g[i]); v = v < 0 ? 0 : v > 255 ? 255 : v; h[v]++; }
+    let total = g.length, sumAll = 0;
+    for (let i = 0; i < 256; i++) sumAll += i * h[i];
+    let wB = 0, sumB = 0, best = 0, thr = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += h[t]; if (!wB) continue;
+      const wF = total - wB; if (!wF) break;
+      sumB += t * h[t];
+      const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+      const between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; thr = t; }
+    }
+    return thr;
+  }
+
+  /* Canny edges -> boolean map */
+  function canny(g, W, H, sens) {
+    const N = W * H, mag = new Float32Array(N), dq = new Uint8Array(N);
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
+        const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
+        mag[i] = Math.hypot(gx, gy);
+        let a = Math.atan2(gy, gx) * 57.29578; if (a < 0) a += 180;
+        dq[i] = (a < 22.5 || a >= 157.5) ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
+      }
+    }
+    let mx = 0; for (let i = 0; i < N; i++) if (mag[i] > mx) mx = mag[i];
+    if (mx <= 0) return new Uint8Array(N);
+    const bins = new Uint32Array(1001);
+    for (let i = 0; i < N; i++) bins[Math.min(1000, (mag[i] / mx * 1000) | 0)]++;
+    let acc = 0, p = 0; const target = N * 0.985;
+    for (let b = 0; b <= 1000; b++) { acc += bins[b]; if (acc >= target) { p = (b + 1) / 1000 * mx; break; } }
+    const s = sens / 100;
+    const hi = Math.max(4, p * (1.0 - 0.85 * s)), lo = hi * 0.4;
+    const e = new Uint8Array(N);
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x, m = mag[i];
+        if (m < lo) continue;
+        let a, b;
+        switch (dq[i]) {
+          case 0: a = mag[i - 1]; b = mag[i + 1]; break;
+          case 1: a = mag[i - W - 1]; b = mag[i + W + 1]; break;
+          case 2: a = mag[i - W]; b = mag[i + W]; break;
+          default: a = mag[i - W + 1]; b = mag[i + W - 1];
+        }
+        if (m >= a && m >= b) e[i] = m >= hi ? 2 : 1;
+      }
+    }
+    const out = new Uint8Array(N), stack = [];
+    for (let i = 0; i < N; i++) if (e[i] === 2) { out[i] = 1; stack.push(i); }
+    const nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+    while (stack.length) {
+      const c = stack.pop();
+      for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (e[j] && !out[j]) { out[j] = 1; stack.push(j); } }
+    }
+    out.mag = mag; out.hi = hi;
+    return out;
+  }
+
+  /* Edge pixels -> polylines */
+  function traceChains(E, W, H, minLen) {
+    const N = W * H, vis = new Uint8Array(N), chains = [];
+    const nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+    const walk = (start) => {
+      const out = []; let cur = start;
+      for (;;) {
+        let nx = -1;
+        for (let k = 0; k < 8; k++) { const j = cur + nb[k]; if (E[j] && !vis[j]) { nx = j; break; } }
+        if (nx < 0) break;
+        vis[nx] = 1; out.push(nx); cur = nx;
+      }
+      return out;
+    };
+    const run = (start) => {
+      vis[start] = 1;
+      const f = walk(start), b = walk(start);
+      const idx = b.reverse().concat([start], f);
+      if (idx.length < Math.max(2, minLen)) return;
+      const pts = idx.map((i) => [i % W, (i / W) | 0]);
+      const a = pts[0], z = pts[pts.length - 1];
+      const closed = pts.length > 8 && Math.abs(a[0] - z[0]) <= 1 && Math.abs(a[1] - z[1]) <= 1;
+      chains.push({ pts, closed });
+    };
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (!E[i] || vis[i]) continue;
+      let d = 0; for (let k = 0; k < 8; k++) if (E[i + nb[k]]) d++;
+      if (d === 1) run(i);
+    }
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (E[i] && !vis[i]) run(i);
+    }
+    return chains;
+  }
+
+  /* Marching squares on a padded field; inside where value < 0 */
+  function marching(g, W, H, T, invert) {
+    const Wp = W + 2, Hp = H + 2, F = new Float32Array(Wp * Hp).fill(1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = invert ? T - g[y * W + x] : g[y * W + x] - T;
+      F[(y + 1) * Wp + x + 1] = v === 0 ? 1e-4 : v;
+    }
+    const K = 2 * Wp * Hp, A = new Int32Array(K).fill(-1), B = new Int32Array(K).fill(-1);
+    const link = (p, q) => {
+      if (A[p] < 0) A[p] = q; else B[p] = q;
+      if (A[q] < 0) A[q] = p; else B[q] = p;
+    };
+    const Hk = (x, y) => 2 * (y * Wp + x), Vk = (x, y) => 2 * (y * Wp + x) + 1;
+    for (let y = 0; y < Hp - 1; y++) {
+      for (let x = 0; x < Wp - 1; x++) {
+        const a = F[y * Wp + x] < 0, b = F[y * Wp + x + 1] < 0, c = F[(y + 1) * Wp + x + 1] < 0, d = F[(y + 1) * Wp + x] < 0;
+        const idx = (a ? 8 : 0) | (b ? 4 : 0) | (c ? 2 : 0) | (d ? 1 : 0);
+        if (idx === 0 || idx === 15) continue;
+        const T_ = Hk(x, y), R = Vk(x + 1, y), Bo = Hk(x, y + 1), L = Vk(x, y);
+        switch (idx) {
+          case 1: case 14: link(L, Bo); break;
+          case 2: case 13: link(Bo, R); break;
+          case 3: case 12: link(L, R); break;
+          case 4: case 11: link(T_, R); break;
+          case 5: link(T_, R); link(L, Bo); break;
+          case 6: case 9: link(T_, Bo); break;
+          case 7: case 8: link(L, T_); break;
+          case 10: link(L, T_); link(Bo, R); break;
+        }
+      }
+    }
+    const pointOf = (k) => {
+      const horiz = (k & 1) === 0, cell = k >> 1, y = (cell / Wp) | 0, x = cell - y * Wp;
+      if (horiz) {
+        const v1 = F[y * Wp + x], v2 = F[y * Wp + x + 1];
+        return [x + v1 / (v1 - v2) - 1, y - 1];
+      }
+      const v1 = F[y * Wp + x], v2 = F[(y + 1) * Wp + x];
+      return [x - 1, y + v1 / (v1 - v2) - 1];
+    };
+    const seen = new Uint8Array(K), loops = [];
+    for (let s = 0; s < K; s++) {
+      if (seen[s] || A[s] < 0) continue;
+      const keys = []; let prev = -1, cur = s, ok = true;
+      for (;;) {
+        seen[cur] = 1; keys.push(cur);
+        let nx = A[cur] !== prev ? A[cur] : B[cur];
+        if (nx < 0) { ok = false; break; }
+        if (A[cur] === B[cur]) nx = A[cur];
+        prev = cur; cur = nx;
+        if (cur === s) break;
+        if (seen[cur]) { ok = false; break; }
+      }
+      if (ok && keys.length >= 3) loops.push(keys.map(pointOf));
+    }
+    return loops;
+  }
+
+  /* Douglas-Peucker */
+  function dp(p, eps) {
+    const n = p.length;
+    if (n < 3) return p.slice();
+    const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+    const st = [[0, n - 1]];
+    while (st.length) {
+      const [s, e] = st.pop();
+      const ax = p[s][0], ay = p[s][1], dx = p[e][0] - ax, dy = p[e][1] - ay, L = Math.hypot(dx, dy);
+      let md = 0, mi = -1;
+      for (let i = s + 1; i < e; i++) {
+        const d = L < 1e-9 ? Math.hypot(p[i][0] - ax, p[i][1] - ay) : Math.abs(dy * (p[i][0] - ax) - dx * (p[i][1] - ay)) / L;
+        if (d > md) { md = d; mi = i; }
+      }
+      if (md > eps && mi > 0) { keep[mi] = 1; st.push([s, mi], [mi, e]); }
+    }
+    return p.filter((_, i) => keep[i]);
+  }
+  function simplify(pts, eps, closed) {
+    if (eps <= 0 || pts.length < 4) return pts;
+    if (!closed) return dp(pts, eps);
+    let m = 0, md = -1;
+    for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > md) { md = d; m = i; } }
+    const a = dp(pts.slice(0, m + 1), eps);
+    const b = dp(pts.slice(m).concat([pts[0]]), eps);
+    return a.concat(b.slice(1, -1));
+  }
+
+
+
+    /* ----- nuove funzioni ----- */
+    function dpIdx(p, eps) {
+      const n = p.length, keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+      const st = [[0, n - 1]];
+      while (st.length) {
+        const [s, e] = st.pop();
+        const ax = p[s][0], ay = p[s][1], dx = p[e][0] - ax, dy = p[e][1] - ay, L = Math.hypot(dx, dy);
+        let md = 0, mi = -1;
+        for (let i = s + 1; i < e; i++) {
+          const d = L < 1e-9 ? Math.hypot(p[i][0] - ax, p[i][1] - ay) : Math.abs(dy * (p[i][0] - ax) - dx * (p[i][1] - ay)) / L;
+          if (d > md) { md = d; mi = i; }
+        }
+        if (md > eps && mi > 0) { keep[mi] = 1; st.push([s, mi], [mi, e]); }
+      }
+      const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(i);
+      return out;
+    }
+
+    /* Diffusione anisotropa (Perona-Malik): spiana texture e rumore, conserva i bordi forti */
+    function diffuse(g, W, H, iters) {
+      if (iters <= 0) return g;
+      let a = Float32Array.from(g), b = new Float32Array(g.length);
+      let s = 0, c = 0;
+      for (let y = 1; y < H - 1; y += 2) for (let x = 1; x < W - 1; x += 2) { const i = y * W + x; s += Math.abs(a[i + 1] - a[i]) + Math.abs(a[i + W] - a[i]); c += 2; }
+      const K = Math.max(3, 2.5 * s / Math.max(1, c)), inv = 1 / (K * K), lam = 0.2;
+      for (let it = 0; it < iters; it++) {
+        b.set(a);
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const i = y * W + x, v = a[i];
+            const dN = a[i - W] - v, dS = a[i + W] - v, dE = a[i + 1] - v, dW = a[i - 1] - v;
+            b[i] = v + lam * (dN / (1 + dN * dN * inv) + dS / (1 + dS * dS * inv) + dE / (1 + dE * dE * inv) + dW / (1 + dW * dW * inv));
+          }
+        }
+        const t = a; a = b; b = t;
+      }
+      return a;
+    }
+
+    /* Elimina i gruppi di pixel-bordo troppo piccoli (puntini di texture) */
+    function dropSmall(E, W, H, minSize) {
+      const N = W * H, seen = new Uint8Array(N), nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+      for (let s = 0; s < N; s++) {
+        if (!E[s] || seen[s]) continue;
+        const comp = [s]; seen[s] = 1;
+        for (let h = 0; h < comp.length; h++) {
+          const c = comp[h];
+          for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (j >= 0 && j < N && E[j] && !seen[j]) { seen[j] = 1; comp.push(j); } }
+        }
+        if (comp.length < minSize) for (const c of comp) E[c] = 0;
+      }
+    }
+    function chainStrength(pts, mag, W) {
+      let s = 0;
+      for (const p of pts) s += mag[Math.round(p[1]) * W + Math.round(p[0])];
+      return s / pts.length;
+    }
+
+    /* Ricuce le lacune tra estremi di tratti che proseguono nella stessa direzione */
+    function bridge(chains, gap) {
+      for (let pass = 0; pass < 3; pass++) {
+        const eps = [];
+        chains.forEach((c, ci) => {
+          if (!c || c.closed || c.pts.length < 6) return;
+          const p = c.pts, n = p.length, k = Math.min(8, n - 1);
+          const d0x = p[0][0] - p[k][0], d0y = p[0][1] - p[k][1], d1x = p[n - 1][0] - p[n - 1 - k][0], d1y = p[n - 1][1] - p[n - 1 - k][1];
+          const l0 = Math.hypot(d0x, d0y) || 1, l1 = Math.hypot(d1x, d1y) || 1;
+          eps.push({ ci, end: 0, x: p[0][0], y: p[0][1], dx: d0x / l0, dy: d0y / l0 });
+          eps.push({ ci, end: 1, x: p[n - 1][0], y: p[n - 1][1], dx: d1x / l1, dy: d1y / l1 });
+        });
+        const cell = Math.max(2, gap), grid = new Map();
+        eps.forEach((e, i) => {
+          const key = Math.floor(e.x / cell) * 100003 + Math.floor(e.y / cell);
+          (grid.get(key) || grid.set(key, []).get(key)).push(i);
+        });
+        const cands = [];
+        eps.forEach((a, i) => {
+          const cx = Math.floor(a.x / cell), cy = Math.floor(a.y / cell);
+          for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+            const arr = grid.get((cx + ox) * 100003 + (cy + oy)); if (!arr) continue;
+            for (const j of arr) {
+              if (j <= i) continue;
+              const b = eps[j];
+              if (a.ci === b.ci && chains[a.ci].pts.length < 30) continue;
+              const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+              if (d > gap) continue;
+              if (d > 1.5) {
+                const vx = dx / d, vy = dy / d;
+                if (a.dx * vx + a.dy * vy < 0.77 || -(b.dx * vx + b.dy * vy) < 0.77) continue;
+              }
+              if (a.dx * b.dx + a.dy * b.dy > -0.5) continue;
+              cands.push({ a, b, d });
+            }
+          }
+        });
+        if (!cands.length) break;
+        cands.sort((u, v) => u.d - v.d);
+        const used = new Set(); let joined = 0;
+        for (const { a, b } of cands) {
+          if (used.has(a.ci) || used.has(b.ci)) continue;
+          if (a.ci === b.ci) { chains[a.ci].closed = true; used.add(a.ci); joined++; continue; }
+          const A = chains[a.ci], B = chains[b.ci];
+          const pa = a.end === 1 ? A.pts : A.pts.slice().reverse();
+          const pb = b.end === 0 ? B.pts : B.pts.slice().reverse();
+          const na = A.pts.length, nb = B.pts.length;
+          chains[a.ci] = { pts: pa.concat(pb), closed: false, str: (A.str * na + B.str * nb) / (na + nb) };
+          chains[b.ci] = null; used.add(a.ci); used.add(b.ci); joined++;
+        }
+        if (!joined) break;
+      }
+      return chains.filter(Boolean);
+    }
+
+    /* Media mobile: toglie la scalettatura dei pixel senza spostare gli estremi */
+    function smoothPts(p, closed, w) {
+      const n = p.length; if (n < 5 || w < 1) return p;
+      const o = new Array(n);
+      for (let i = 0; i < n; i++) {
+        let sx = 0, sy = 0, c = 0;
+        for (let k = -w; k <= w; k++) {
+          let j = i + k;
+          if (closed) j = ((j % n) + n) % n; else if (j < 0 || j >= n) continue;
+          sx += p[j][0]; sy += p[j][1]; c++;
+        }
+        o[i] = [sx / c, sy / c];
+      }
+      if (!closed) { o[0] = p[0]; o[n - 1] = p[n - 1]; }
+      return o;
+    }
+
+    /* Cerchio ai minimi quadrati (Kasa) sui punti i..j; restituisce null se non è un arco credibile */
+    function arcFit(q, i, j, tol, strict) {
+      const N = j - i + 1; if (N < 7) return null;
+      let mx = 0, my = 0;
+      for (let k = i; k <= j; k++) { mx += q[k][0]; my += q[k][1]; }
+      mx /= N; my /= N;
+      let Suu = 0, Svv = 0, Suv = 0, Suuu = 0, Svvv = 0, Suvv = 0, Svuu = 0;
+      for (let k = i; k <= j; k++) {
+        const u = q[k][0] - mx, v = q[k][1] - my;
+        Suu += u * u; Svv += v * v; Suv += u * v; Suuu += u * u * u; Svvv += v * v * v; Suvv += u * v * v; Svuu += v * u * u;
+      }
+      const det = Suu * Svv - Suv * Suv;
+      if (Math.abs(det) < 1e-9) return null;
+      const b1 = 0.5 * (Suuu + Suvv), b2 = 0.5 * (Svvv + Svuu);
+      const uc = (b1 * Svv - b2 * Suv) / det, vc = (Suu * b2 - Suv * b1) / det;
+      const cx = mx + uc, cy = my + vc, r = Math.sqrt(uc * uc + vc * vc + (Suu + Svv) / N);
+      if (!(r > 3 * tol) || r > 4000) return null;
+      let prev = Math.atan2(q[i][1] - cy, q[i][0] - cx); const a0 = prev;
+      let sum = 0, abs = 0;
+      for (let k = i; k <= j; k++) {
+        const e = Math.abs(Math.hypot(q[k][0] - cx, q[k][1] - cy) - r);
+        if (e > tol) return null;
+        if (k > i) {
+          const a = Math.atan2(q[k][1] - cy, q[k][0] - cx);
+          let d = a - prev;
+          if (d > Math.PI) d -= 2 * Math.PI; else if (d < -Math.PI) d += 2 * Math.PI;
+          sum += d; abs += Math.abs(d); prev = a;
+        }
+      }
+      const sw = Math.abs(sum);
+      if (sw > 3.4 || abs > sw * 1.2 + 0.05) return null;
+      if (strict) {
+        const chord = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]);
+        const sag = r - Math.sqrt(Math.max(0, r * r - chord * chord / 4));
+        if (sw < 0.35 || (sw < Math.PI && sag < 1.5 * tol)) return null;
+      }
+      return { cx, cy, r, a0, sum };
+    }
+
+    /* Spezza una catena di punti in linee rette e archi di cerchio */
+    function fitChain(pts, closed, tol, useArcs) {
+      let q = pts;
+      if (closed && q.length > 6) {
+        const qq = q.concat([q[0]]);
+        const idx = dpIdx(qq, Math.max(2 * tol, 2));
+        let best = 0.35, bi = 0;
+        for (let t = 1; t < idx.length - 1; t++) {
+          const p0 = qq[idx[t - 1]], p1 = qq[idx[t]], p2 = qq[idx[t + 1]];
+          const a1 = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]), a2 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+          let d = Math.abs(a2 - a1); if (d > Math.PI) d = 2 * Math.PI - d;
+          if (d > best) { best = d; bi = idx[t]; }
+        }
+        q = q.slice(bi).concat(q.slice(0, bi)); q.push([q[0][0], q[0][1]]);
+      } else if (closed) {
+        q = q.concat([q[0]]);
+      }
+      const n = q.length, segs = [];
+      if (n < 2) return segs;
+      const lineOK = (i, j) => {
+        const ax = q[i][0], ay = q[i][1], dx = q[j][0] - ax, dy = q[j][1] - ay, L = Math.hypot(dx, dy);
+        for (let k = i + 1; k < j; k++) {
+          const d = L < 1e-9 ? Math.hypot(q[k][0] - ax, q[k][1] - ay) : Math.abs(dy * (q[k][0] - ax) - dx * (q[k][1] - ay)) / L;
+          if (d > tol) return false;
+        }
+        return true;
+      };
+      const arcOK = (i, j) => !!arcFit(q, i, j, tol, false);
+      const longest = (i, lo, ok) => {
+        let step = 2, hi = -1;
+        for (;;) {
+          const t = Math.min(n - 1, lo + step);
+          if (t === lo) break;
+          if (ok(i, t)) { lo = t; step *= 2; } else { hi = t; break; }
+        }
+        if (hi < 0) return lo;
+        while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ok(i, m)) lo = m; else hi = m; }
+        return lo;
+      };
+      const refine = (i, j) => {
+        const N = j - i + 1;
+        if (N < 4) return { x0: q[i][0], y0: q[i][1], x1: q[j][0], y1: q[j][1] };
+        let cx = 0, cy = 0;
+        for (let k = i; k <= j; k++) { cx += q[k][0]; cy += q[k][1]; }
+        cx /= N; cy /= N;
+        let sxx = 0, syy = 0, sxy = 0;
+        for (let k = i; k <= j; k++) { const u = q[k][0] - cx, v = q[k][1] - cy; sxx += u * u; syy += v * v; sxy += u * v; }
+        const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+        const t0 = (q[i][0] - cx) * ux + (q[i][1] - cy) * uy, t1 = (q[j][0] - cx) * ux + (q[j][1] - cy) * uy;
+        return { x0: cx + ux * t0, y0: cy + uy * t0, x1: cx + ux * t1, y1: cy + uy * t1 };
+      };
+      let i = 0;
+      while (i < n - 1) {
+        const jl = longest(i, i + 1, lineOK);
+        let ja = i;
+        if (useArcs && n - 1 - i >= 6) {
+          const s0 = Math.min(n - 1, i + 6);
+          if (arcOK(i, s0)) ja = longest(i, s0, arcOK);
+        }
+        const f = ja > jl + Math.max(2, 0.2 * (jl - i)) ? arcFit(q, i, ja, tol, true) : null;
+        if (f) {
+          const a1 = f.a0 + f.sum, am = f.a0 + f.sum / 2;
+          segs.push({
+            arc: true,
+            x0: f.cx + f.r * Math.cos(f.a0), y0: f.cy + f.r * Math.sin(f.a0),
+            x1: f.cx + f.r * Math.cos(a1), y1: f.cy + f.r * Math.sin(a1),
+            mx: f.cx + f.r * Math.cos(am), my: f.cy + f.r * Math.sin(am),
+          });
+          i = ja;
+        } else {
+          const l = refine(i, jl); l.arc = false; segs.push(l);
+          i = jl;
+        }
+      }
+      return segs;
+    }
+
+    /* Unisce i segmenti allineati e sovrapposti (anche da catene diverse) e i doppioni paralleli */
+    function mergeLines(L, tol, gap) {
+      const cosT = Math.cos(3 * Math.PI / 180);
+      for (const s of L) { s.len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0); s.ux = s.len > 1e-9 ? (s.x1 - s.x0) / s.len : 1; s.uy = s.len > 1e-9 ? (s.y1 - s.y0) / s.len : 0; s.alive = true; }
+      const order = L.map((_, i) => i).sort((a, b) => L[b].len - L[a].len);
+      const out = [];
+      for (const si of order) {
+        const s = L[si]; if (!s.alive) continue;
+        s.alive = false;
+        const ox = (s.x0 + s.x1) / 2, oy = (s.y0 + s.y1) / 2, ux = s.ux, uy = s.uy, nx = -uy, ny = ux;
+        let lo = -s.len / 2, hi = s.len / 2;
+        const cl = [s];
+        let changed = true, pass = 0;
+        while (changed && pass++ < 4) {
+          changed = false;
+          for (const t of L) {
+            if (!t.alive) continue;
+            if (Math.abs(t.ux * ux + t.uy * uy) < cosT) continue;
+            const d0 = nx * (t.x0 - ox) + ny * (t.y0 - oy), d1 = nx * (t.x1 - ox) + ny * (t.y1 - oy);
+            if (Math.abs(d0) > tol || Math.abs(d1) > tol) continue;
+            const a0 = ux * (t.x0 - ox) + uy * (t.y0 - oy), a1 = ux * (t.x1 - ox) + uy * (t.y1 - oy);
+            const tl = Math.min(a0, a1), th = Math.max(a0, a1);
+            if (tl - hi > gap || lo - th > gap) continue;
+            t.alive = false; cl.push(t);
+            if (tl < lo) lo = tl; if (th > hi) hi = th;
+            changed = true;
+          }
+        }
+        if (cl.length === 1) { out.push({ x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }); continue; }
+        let sw = 0, mx = 0, my = 0;
+        for (const t of cl) { mx += t.len * (t.x0 + t.x1) / 2; my += t.len * (t.y0 + t.y1) / 2; sw += t.len; }
+        mx /= sw; my /= sw;
+        let sxx = 0, syy = 0, sxy = 0;
+        for (const t of cl) for (const e of [[t.x0, t.y0], [t.x1, t.y1]]) { const dx = e[0] - mx, dy = e[1] - my; sxx += t.len * dx * dx; syy += t.len * dy * dy; sxy += t.len * dx * dy; }
+        const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+        let dx = Math.cos(ang), dy = Math.sin(ang);
+        if (dx * ux + dy * uy < 0) { dx = -dx; dy = -dy; }
+        let mn = Infinity, mxp = -Infinity;
+        for (const t of cl) for (const e of [[t.x0, t.y0], [t.x1, t.y1]]) { const a = (e[0] - mx) * dx + (e[1] - my) * dy; if (a < mn) mn = a; if (a > mxp) mxp = a; }
+        out.push({ x0: mx + dx * mn, y0: my + dy * mn, x1: mx + dx * mxp, y1: my + dy * mxp });
+      }
+      return out;
+    }
+
+    /* Porta a esattamente orizzontali/verticali le linee che lo sono quasi */
+    function straighten(L, deg) {
+      for (const s of L) {
+        const dx = s.x1 - s.x0, dy = s.y1 - s.y0;
+        if (Math.hypot(dx, dy) < 1e-6) continue;
+        const a = ((Math.atan2(dy, dx) * 180 / Math.PI) % 180 + 180) % 180;
+        if (a < deg || a > 180 - deg) { const y = (s.y0 + s.y1) / 2; s.y0 = s.y1 = y; }
+        else if (Math.abs(a - 90) < deg) { const x = (s.x0 + s.x1) / 2; s.x0 = s.x1 = x; }
+      }
+    }
+
+    function intersect(a, b) {
+      const dxa = a.x1 - a.x0, dya = a.y1 - a.y0, dxb = b.x1 - b.x0, dyb = b.y1 - b.y0;
+      const la = Math.hypot(dxa, dya), lb = Math.hypot(dxb, dyb);
+      if (la < 1e-9 || lb < 1e-9) return null;
+      const den = dxa * dyb - dya * dxb;
+      if (Math.abs(den) < 0.2 * la * lb) return null;
+      const t = ((b.x0 - a.x0) * dyb - (b.y0 - a.y0) * dxb) / den;
+      return [a.x0 + t * dxa, a.y0 + t * dya];
+    }
+
+    /* Salda gli estremi vicini in un unico vertice (angolo = intersezione delle due rette) */
+    function weld(L, A, snap) {
+      const E = [];
+      L.forEach((s, i) => { E.push({ t: 0, i, x: s.x0, y: s.y0 }); E.push({ t: 0, i, x: s.x1, y: s.y1 }); });
+      A.forEach((s, i) => { E.push({ t: 1, i, x: s.x0, y: s.y0 }); E.push({ t: 1, i, x: s.x1, y: s.y1 }); });
+      const par = E.map((_, i) => i);
+      const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+      const cell = Math.max(1, snap), grid = new Map();
+      E.forEach((p, k) => {
+        const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell);
+        for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+          const arr = grid.get((cx + ox) * 100003 + (cy + oy)); if (!arr) continue;
+          for (const j of arr) if (Math.hypot(E[j].x - p.x, E[j].y - p.y) <= snap) par[find(k)] = find(j);
+        }
+        const key = cx * 100003 + cy;
+        (grid.get(key) || grid.set(key, []).get(key)).push(k);
+      });
+      const groups = new Map();
+      E.forEach((p, k) => { const r = find(k); (groups.get(r) || groups.set(r, []).get(r)).push(k); });
+      const V = [], vid = new Int32Array(E.length);
+      for (const ks of groups.values()) {
+        let x = 0, y = 0;
+        for (const k of ks) { x += E[k].x; y += E[k].y; }
+        x /= ks.length; y /= ks.length;
+        if (ks.length === 2) {
+          const a = E[ks[0]], b = E[ks[1]];
+          if (a.t === 0 && b.t === 0 && a.i !== b.i) {
+            const p = intersect(L[a.i], L[b.i]);
+            if (p && Math.hypot(p[0] - x, p[1] - y) <= 2 * snap) { x = p[0]; y = p[1]; }
+          }
+        }
+        const id = V.length; V.push([x, y]);
+        for (const k of ks) vid[k] = id;
+      }
+      const segs = [], off = 2 * L.length;
+      L.forEach((s, i) => { const a = vid[2 * i], b = vid[2 * i + 1]; if (a !== b) segs.push({ a, b, m: null }); });
+      A.forEach((s, i) => { const a = vid[off + 2 * i], b = vid[off + 2 * i + 1]; if (a !== b) segs.push({ a, b, m: [s.mx, s.my] }); });
+      return { V, segs };
+    }
+
+    /* Estremi liberi vicini a una linea: appoggiati sulla linea (giunzioni a T) */
+    function tSnap(V, segs, snap) {
+      const deg = new Int32Array(V.length);
+      for (const s of segs) { deg[s.a]++; deg[s.b]++; }
+      const lines = segs.filter((s) => !s.m);
+      for (let v = 0; v < V.length; v++) {
+        if (deg[v] !== 1) continue;
+        const px = V[v][0], py = V[v][1];
+        let best = snap, bx = 0, by = 0, found = false;
+        for (const s of lines) {
+          if (s.a === v || s.b === v) continue;
+          const ax = V[s.a][0], ay = V[s.a][1], cx = V[s.b][0], cy = V[s.b][1];
+          if (px < Math.min(ax, cx) - snap || px > Math.max(ax, cx) + snap || py < Math.min(ay, cy) - snap || py > Math.max(ay, cy) + snap) continue;
+          const dx = cx - ax, dy = cy - ay, l2 = dx * dx + dy * dy;
+          if (l2 < 1e-9) continue;
+          const t = ((px - ax) * dx + (py - ay) * dy) / l2;
+          if (t <= 0.02 || t >= 0.98) continue;
+          const qx = ax + t * dx, qy = ay + t * dy, d = Math.hypot(px - qx, py - qy);
+          if (d < best) { best = d; bx = qx; by = qy; found = true; }
+        }
+        if (found) { V[v][0] = bx; V[v][1] = by; }
+      }
+    }
+
+    function bulgeOf(P, Q, M) {
+      if (!M) return 0;
+      const dx = Q[0] - P[0], dy = Q[1] - P[1], c = Math.hypot(dx, dy);
+      if (c < 1e-6) return 0;
+      const s = (M[0] - P[0]) * (-dy / c) + (M[1] - P[1]) * (dx / c);
+      const b = 2 * s / c;
+      if (Math.abs(b) < 0.01) return 0;
+      return Math.max(-12, Math.min(12, b));
+    }
+
+    /* Concatena i segmenti collegati in polilinee (con archi come "bulge", come in AutoCAD) */
+    function buildPaths(V, segs) {
+      const adj = V.map(() => []);
+      segs.forEach((s, i) => { adj[s.a].push(i); adj[s.b].push(i); });
+      const used = new Uint8Array(segs.length), paths = [];
+      const walk = (start, first) => {
+        const vs = [start], bs = []; let cur = start, si = first, closed = false;
+        for (;;) {
+          used[si] = 1;
+          const s = segs[si], nxt = s.a === cur ? s.b : s.a;
+          bs.push(bulgeOf(V[cur], V[nxt], s.m));
+          cur = nxt;
+          if (cur === start) { closed = true; break; }
+          vs.push(cur);
+          if (adj[cur].length !== 2) break;
+          const o = adj[cur][0] === si ? adj[cur][1] : adj[cur][0];
+          if (used[o]) break;
+          si = o;
+        }
+        paths.push({ vs, bs, closed });
+      };
+      for (let v = 0; v < V.length; v++) {
+        if (adj[v].length === 2) continue;
+        for (const si of adj[v]) if (!used[si]) walk(v, si);
+      }
+      for (let i = 0; i < segs.length; i++) if (!used[i]) walk(segs[i].a, i);
+      return paths;
+    }
+
+    function pathLength(v, b, closed) {
+      const n = v.length / 2, m = closed ? n : n - 1; let L = 0;
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, c = Math.hypot(v[2 * j] - v[2 * i], v[2 * j + 1] - v[2 * i + 1]);
+        if (!b[i]) L += c; else { const th = 4 * Math.atan(Math.abs(b[i])); L += c / (2 * Math.sin(th / 2)) * th; }
+      }
+      return L;
+    }
+
+    function run(P) {
+      const W = IMG.W, H = IMG.H, gray = IMG.gray, mode = P.mode, tol = Math.max(0.5, P.simp);
+      let chains = [], T = null;
+      if (mode === 'shape') {
+        const g = gaussBlur(gray, W, H, P.blur);
+        T = P.auto ? otsu(g) : P.thr;
+        for (const l of marching(g, W, H, T, P.inv)) if (l.length >= Math.max(4, P.minlen)) chains.push({ pts: l, closed: true, str: 1 });
+      } else {
+        const arch = mode === 'arch';
+        const iters = arch ? 8 : 2, sigma = Math.max(arch ? 1.2 : 0.6, P.blur);
+        const key = mode + '|' + iters + '|' + sigma;
+        if (PRE.key !== key) PRE = { key, g: gaussBlur(diffuse(gray, W, H, iters), W, H, sigma) };
+        const E = canny(PRE.g, W, H, P.sens);
+        if (E.mag) {
+          dropSmall(E, W, H, Math.max(4, Math.round(P.minlen * (arch ? 0.8 : 0.5))));
+          chains = traceChains(E, W, H, 4);
+          for (const c of chains) c.str = chainStrength(c.pts, E.mag, W);
+          chains = bridge(chains, Math.min(14, 3 + 2 * P.merge));
+          chains = chains.filter((c) => {
+            const n = c.pts.length;
+            if (n < Math.max(4, P.minlen)) return false;
+            if (arch && n < 4 * P.minlen && c.str < E.hi * 1.3) return false;
+            return true;
+          });
+        }
+      }
+      const rawPts = chains.reduce((s, c) => s + c.pts.length, 0);
+      const L = [], A = [];
+      for (const c of chains) {
+        const pts = smoothPts(c.pts, c.closed, mode === 'shape' ? 1 : 2);
+        for (const s of fitChain(pts, c.closed, tol, P.arcs)) (s.arc ? A : L).push(s);
+      }
+      const L2 = P.merge > 0 ? mergeLines(L, P.merge, 3 * P.merge + 2) : L;
+      if (P.straight) straighten(L2, 3);
+      const snap = 1 + 1.2 * P.merge;
+      const { V, segs: s0 } = weld(L2, A, snap);
+      tSnap(V, s0, snap);
+      const seen = new Set(), segs = [];
+      for (const s of s0) {
+        if (!s.m) { const k = Math.min(s.a, s.b) + '_' + Math.max(s.a, s.b); if (seen.has(k)) continue; seen.add(k); }
+        segs.push(s);
+      }
+      const paths = [];
+      let lines = 0, arcs = 0;
+      for (const p of buildPaths(V, segs)) {
+        const v = []; for (const id of p.vs) v.push(V[id][0], V[id][1]);
+        if (pathLength(v, p.bs, p.closed) < Math.max(2, P.minlen * 0.8)) continue;
+        for (const b of p.bs) { if (b) arcs++; else lines++; }
+        paths.push({ c: p.closed ? 1 : 0, v, b: p.bs });
+      }
+      return { paths, info: { T, lines, arcs, rawPts } };
+    }
+
+    return { setImage, run };
+  }
+
+  /* ---------- pipeline (interfaccia -> motore) ---------- */
+  let worker = null, direct = null, inflight = false, dirty = false, reqId = 0, timer;
+  function initEngine() {
+    try {
+      const src = makeEngine.toString() + ';const E=makeEngine();onmessage=function(ev){const m=ev.data;if(m.type==="img"){E.setImage(m.W,m.H,m.gray);return;}try{postMessage({type:"res",id:m.id,gen:m.gen,res:E.run(m.p)});}catch(err){postMessage({type:"err",id:m.id,gen:m.gen,msg:String(err&&err.message||err)});}};';
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = (ev) => {
+        const m = ev.data; inflight = false;
+        if (m.type === 'res' && m.gen === S.gen) applyResult(m.res);
+        else if (m.type === 'err') say('Elaborazione non riuscita su questa immagine: ' + m.msg);
+        finish();
+      };
+      worker.onerror = () => useDirect();
+    } catch (e) { useDirect(); }
+  }
+  function useDirect() {
+    if (worker) { try { worker.terminate(); } catch (e) { /* niente */ } worker = null; }
+    direct = makeEngine();
+    if (S.gray) direct.setImage(S.W, S.H, S.gray.slice());
+    inflight = false;
+    request();
+  }
+  function sendImage() {
+    if (worker) { const c = S.gray.slice(); worker.postMessage({ type: 'img', W: S.W, H: S.H, gray: c }, [c.buffer]); }
+    else if (direct) direct.setImage(S.W, S.H, S.gray.slice());
+  }
+  function finish() { if (dirty) request(); else $('busy').hidden = true; }
+  function request() {
+    if (!S.gray) return;
+    if (inflight) { dirty = true; return; }
+    dirty = false; inflight = true; $('busy').hidden = false;
+    const id = ++reqId, gen = S.gen, p = params();
+    if (worker) worker.postMessage({ type: 'run', id, gen, p });
+    else setTimeout(() => {
+      let res = null;
+      try { res = direct.run(p); } catch (e) { console.error(e); say('Elaborazione non riuscita su questa immagine.'); }
+      inflight = false;
+      if (res && gen === S.gen) applyResult(res);
+      finish();
+    }, 20);
+  }
+  function schedule() {
+    updateLabels(params());
+    $('busy').hidden = false;
+    clearTimeout(timer);
+    timer = setTimeout(request, 130);
+  }
+  function applyResult(res) {
+    S.paths = res.paths; S.info = res.info;
+    if (res.info.T != null && $('auto').checked) $('thr').value = res.info.T;
+    render();
+  }
+
+  function params() {
+    return {
+      mode: S.mode,
+      sens: +$('sens').value,
+      blur: +$('blur').value / 10,
+      simp: +$('simp').value / 10,
+      minlen: +$('minlen').value,
+      merge: +$('merge').value / 10,
+      arcs: $('arcs').checked,
+      straight: $('straight').checked,
+      auto: $('auto').checked,
+      thr: +$('thr').value,
+      inv: $('inv').checked,
+    };
+  }
+  function updateLabels(p) {
+    $('o-sens').textContent = p.sens + '%';
+    $('o-blur').textContent = fmt1(p.blur) + ' px';
+    $('o-simp').textContent = fmt1(p.simp) + ' px';
+    $('o-min').textContent = p.minlen + ' px';
+    $('o-merge').textContent = p.merge > 0 ? fmt1(p.merge) + ' px' : 'no';
+    $('o-thr').textContent = p.auto ? 'auto' : String(p.thr);
+  }
+  const DEF = {
+    edges: { sens: 55, blur: 12, simp: 10, minlen: 14, merge: 20, straight: false },
+    arch: { sens: 45, blur: 16, simp: 15, minlen: 30, merge: 30, straight: true },
+    shape: { blur: 15, simp: 8, minlen: 20, merge: 20, straight: false },
+  };
+  function applyDefaults(mode) {
+    const d = DEF[mode];
+    for (const k of ['sens', 'blur', 'simp', 'minlen', 'merge']) if (d[k] !== undefined) $(k).value = d[k];
+    $('straight').checked = d.straight;
+  }
+
+  /* ---------- output builders ---------- */
+  function pathD(paths, fx, fy, rs, digits) {
+    const f = (n) => (digits === 1 ? String(Math.round(n * 10) / 10) : String(+n.toFixed(digits)));
+    const out = [];
+    for (const p of paths) {
+      const v = p.v, n = v.length / 2, m = p.c ? n : n - 1;
+      let d = 'M' + f(fx(v[0])) + ' ' + f(fy(v[1]));
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, x = v[2 * j], y = v[2 * j + 1], b = p.b[i];
+        if (!b) d += 'L' + f(fx(x)) + ' ' + f(fy(y));
+        else {
+          const c = Math.hypot(x - v[2 * i], y - v[2 * i + 1]), th = 4 * Math.atan(Math.abs(b)), r = c / (2 * Math.sin(th / 2)) * rs;
+          d += 'A' + f(r) + ' ' + f(r) + ' 0 ' + (th > Math.PI ? 1 : 0) + ' ' + (b > 0 ? 0 : 1) + ' ' + f(fx(x)) + ' ' + f(fy(y));
+        }
+      }
+      out.push(d + (p.c ? 'Z' : ''));
+    }
+    return out.join('');
+  }
+  function measure() {
+    let verts = 0, len = 0;
+    for (const p of S.paths) { verts += p.v.length / 2; len += pathLenOf(p); }
+    return { verts, len };
+  }
+  function pathLenOf(p) {
+    const v = p.v, n = v.length / 2, m = p.c ? n : n - 1; let L = 0;
+    for (let i = 0; i < m; i++) {
+      const j = (i + 1) % n, c = Math.hypot(v[2 * j] - v[2 * i], v[2 * j + 1] - v[2 * i + 1]), b = p.b[i];
+      if (!b) L += c; else { const th = 4 * Math.atan(Math.abs(b)); L += c / (2 * Math.sin(th / 2)) * th; }
+    }
+    return L;
+  }
+  function widthMm() { const v = parseFloat($('wmm').value); return v > 0 ? v : 200; }
+
+  function render() {
+    $('vp').setAttribute('d', pathD(S.paths, (x) => x, (y) => y, 1, 1));
+    updateBlock();
+  }
+  function updateBlock() {
+    const sc = widthMm() / S.W, m = measure();
+    $('tb-size').textContent = fmt1(widthMm()) + ' × ' + fmt1(S.H * sc) + ' mm';
+    $('tb-paths').textContent = fmtInt(S.paths.length);
+    $('tb-pts').textContent = fmtInt(m.verts);
+    $('tb-ent').textContent = fmtInt(S.info.lines || 0) + ' linee · ' + fmtInt(S.info.arcs || 0) + ' archi';
+    const mm = m.len * sc;
+    $('tb-len').textContent = mm >= 1000 ? (mm / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 }) + ' m' : fmt1(mm) + ' mm';
+    const has = S.paths.length > 0;
+    for (const id of ['ex-svg', 'ex-dxf', 'ex-pdf', 'ex-copy']) $(id).disabled = !has;
+  }
+
+  function buildSVG() {
+    const sc = widthMm() / S.W, w = widthMm(), h = S.H * sc;
+    const d = pathD(S.paths, (x) => x * sc, (y) => y * sc, sc, 3);
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + w.toFixed(3) + 'mm" height="' + h.toFixed(3) + 'mm" viewBox="0 0 ' + w.toFixed(3) + ' ' + h.toFixed(3) + '">\n<path d="' + d + '" fill="none" stroke="#000000" stroke-width="0.1" stroke-linejoin="round" stroke-linecap="round"/>\n</svg>\n';
+  }
+  /* DXF R12: LINE per i tratti singoli, POLYLINE con "bulge" per catene e archi */
+  function buildDXF() {
+    const sc = widthMm() / S.W, H = S.H;
+    const o = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
+    const X = (x) => (x * sc).toFixed(3), Y = (y) => ((H - y) * sc).toFixed(3);
+    for (const p of S.paths) {
+      const v = p.v, n = v.length / 2;
+      if (!p.c && n === 2 && !p.b[0]) {
+        o.push('0', 'LINE', '8', '0', '10', X(v[0]), '20', Y(v[1]), '30', '0.0', '11', X(v[2]), '21', Y(v[3]), '31', '0.0');
+        continue;
+      }
+      o.push('0', 'POLYLINE', '8', '0', '66', '1', '10', '0.0', '20', '0.0', '30', '0.0', '70', p.c ? '1' : '0');
+      for (let i = 0; i < n; i++) {
+        o.push('0', 'VERTEX', '8', '0', '10', X(v[2 * i]), '20', Y(v[2 * i + 1]), '30', '0.0');
+        if (i < p.b.length && p.b[i]) o.push('42', p.b[i].toFixed(6));
+      }
+      o.push('0', 'SEQEND', '8', '0');
+    }
+    o.push('0', 'ENDSEC', '0', 'EOF');
+    return o.join('\n') + '\n';
+  }
+  function arcBezier(P, Q, b) {
+    const dx = Q[0] - P[0], dy = Q[1] - P[1], c = Math.hypot(dx, dy);
+    const th = 4 * Math.atan(Math.abs(b)), r = c / (2 * Math.sin(th / 2)), sg = b > 0 ? 1 : -1;
+    const nx = -dy / c, ny = dx / c, s = Math.abs(b) * c / 2;
+    const ccx = (P[0] + Q[0]) / 2 + nx * sg * (s - r), ccy = (P[1] + Q[1]) / 2 + ny * sg * (s - r);
+    let a = Math.atan2(P[1] - ccy, P[0] - ccx);
+    const delta = (b > 0 ? -1 : 1) * th, pieces = Math.ceil(Math.abs(delta) / (Math.PI / 2)), phi = delta / pieces, k = 4 / 3 * Math.tan(phi / 4);
+    const out = [];
+    for (let i = 0; i < pieces; i++) {
+      const a1 = a + phi;
+      const p0x = ccx + r * Math.cos(a), p0y = ccy + r * Math.sin(a), p3x = ccx + r * Math.cos(a1), p3y = ccy + r * Math.sin(a1);
+      out.push([p0x - k * r * Math.sin(a), p0y + k * r * Math.cos(a), p3x + k * r * Math.sin(a1), p3y - k * r * Math.cos(a1), p3x, p3y]);
+      a = a1;
+    }
+    return out;
+  }
+  function buildPDF() {
+    const k = 72 / 25.4, sc = widthMm() / S.W * k, pw = widthMm() * k, ph = S.H * sc, H = S.H;
+    const X = (x) => (x * sc).toFixed(2), Y = (y) => ((H - y) * sc).toFixed(2);
+    const c = ['0.3 w 1 J 1 j 0 0 0 RG'];
+    for (const p of S.paths) {
+      const v = p.v, n = v.length / 2, m = p.c ? n : n - 1, parts = [X(v[0]) + ' ' + Y(v[1]) + ' m'];
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, b = p.b[i];
+        if (!b) parts.push(X(v[2 * j]) + ' ' + Y(v[2 * j + 1]) + ' l');
+        else for (const z of arcBezier([v[2 * i], v[2 * i + 1]], [v[2 * j], v[2 * j + 1]], b)) parts.push(X(z[0]) + ' ' + Y(z[1]) + ' ' + X(z[2]) + ' ' + Y(z[3]) + ' ' + X(z[4]) + ' ' + Y(z[5]) + ' c');
+      }
+      parts.push(p.c ? 'h S' : 'S');
+      c.push(parts.join('\n'));
+    }
+    const cs = c.join('\n') + '\n';
+    const objs = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw.toFixed(2) + ' ' + ph.toFixed(2) + '] /Contents 4 0 R /Resources << >> >>',
+      '<< /Length ' + cs.length + ' >>\nstream\n' + cs + 'endstream',
+    ];
+    let out = '%PDF-1.4\n'; const offs = [];
+    objs.forEach((ob, i) => { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + ob + '\nendobj\n'; });
+    const xr = out.length;
+    out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + offs.map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('') + 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xr + '\n%%EOF';
+    return out;
+  }
+
+  /* ---------- saving ---------- */
+  const baseName = () => (S.name || 'disegno').replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '_') || 'disegno';
+  async function saveFile(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    let dl = null;
+    try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); say('Salvato: ' + filename); return; }
+      catch (e) {
+        if (e && e.code === 'declined') { say('Salvataggio annullato.'); return; }
+        if (e && e.code === 'rejected_extension' && filename.endsWith('.dxf')) {
+          try { await dl.save({ filename: filename + '.txt', data: blob }); say('Salvato come ' + filename + '.txt. Rinominalo in .dxf per aprirlo nel CAD.'); return; }
+          catch (e2) { if (e2 && e2.code === 'declined') { say('Salvataggio annullato.'); return; } }
+        }
+        say('Il download non è disponibile qui. Usa "Copia il DXF" oppure apri il file della pagina nel browser.');
+        return;
+      }
+    }
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    say('Scaricato: ' + filename);
+  }
+
+
+
+  /* ---------- zoom e pan ---------- */
+  const View = { k: 1, x: 0, y: 0 };
+  function applyView() {
+    const f = $('frame'), w = f.clientWidth, h = f.clientHeight;
+    View.k = Math.min(40, Math.max(1, View.k));
+    View.x = Math.min(0, Math.max(w - w * View.k, View.x));
+    View.y = Math.min(0, Math.max(h - h * View.k, View.y));
+    $('vpwrap').style.transform = 'translate(' + View.x + 'px,' + View.y + 'px) scale(' + View.k + ')';
+    f.classList.toggle('zoomed', View.k > 1.001);
+    $('zlabel').textContent = Math.round(View.k * 100) + '%';
+  }
+  function zoomAt(px, py, nk) {
+    nk = Math.min(40, Math.max(1, nk));
+    View.x = px - (px - View.x) * nk / View.k;
+    View.y = py - (py - View.y) * nk / View.k;
+    View.k = nk; applyView();
+  }
+  (() => {
+    const f = $('frame'), ptrs = new Map();
+    const rel = (e) => { const r = f.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    f.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = rel(e); zoomAt(x, y, View.k * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+    f.addEventListener('pointerdown', (e) => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { f.setPointerCapture(e.pointerId); } catch (err) { /* niente */ } });
+    f.addEventListener('pointermove', (e) => {
+      const p = ptrs.get(e.pointerId); if (!p) return;
+      if (ptrs.size === 1) {
+        if (View.k > 1) { View.x += e.clientX - p.x; View.y += e.clientY - p.y; applyView(); }
+      } else if (ptrs.size === 2) {
+        const [a, b] = [...ptrs.values()], before = Math.hypot(a.x - b.x, a.y - b.y);
+        p.x = e.clientX; p.y = e.clientY;
+        const after = Math.hypot(a.x - b.x, a.y - b.y);
+        if (before > 0) { const r = f.getBoundingClientRect(); zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, View.k * after / before); }
+      }
+      p.x = e.clientX; p.y = e.clientY;
+    });
+    const up = (e) => ptrs.delete(e.pointerId);
+    f.addEventListener('pointerup', up); f.addEventListener('pointercancel', up);
+    f.addEventListener('dblclick', (e) => { const [x, y] = rel(e); if (View.k > 1.01) { View.k = 1; View.x = View.y = 0; applyView(); } else zoomAt(x, y, 3); });
+    $('zin').addEventListener('click', () => zoomAt(f.clientWidth / 2, f.clientHeight / 2, View.k * 1.6));
+    $('zout').addEventListener('click', () => zoomAt(f.clientWidth / 2, f.clientHeight / 2, View.k / 1.6));
+    $('zfit').addEventListener('click', () => { View.k = 1; View.x = View.y = 0; applyView(); });
+    window.addEventListener('resize', applyView);
+  })();
+
+  /* ---------- wiring ---------- */
+  for (const id of ['sens', 'blur', 'simp', 'minlen', 'merge', 'thr', 'inv', 'arcs', 'straight']) $(id).addEventListener('input', schedule);
+  $('auto').addEventListener('change', () => { $('thr').disabled = $('auto').checked; schedule(); });
+  $('wmm').addEventListener('input', () => { if (S.W) updateBlock(); });
+
+  document.querySelectorAll('.seg [data-view]').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.seg [data-view]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      $('frame').dataset.view = b.dataset.view;
+    });
+  });
+  const hints = {
+    edges: 'Linee sottili lungo i bordi dell\'immagine, come un disegno al tratto.',
+    arch: 'Per edifici e facciate: ignora texture e piccole ombre, tiene gli spigoli strutturali e prova a raddrizzarli.',
+    shape: 'Contorni chiusi di zone scure e chiare. Adatta a sagome da tagliare al laser o alla CNC.',
+  };
+  function setMode(mode) {
+    S.mode = mode;
+    document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.mode === mode)));
+    $('f-sens').hidden = mode === 'shape';
+    $('f-shape').hidden = mode !== 'shape';
+    $('modehint').textContent = hints[mode];
+    applyDefaults(mode);
+  }
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { setMode(b.dataset.mode); schedule(); }));
+
+  $('pick').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', (e) => { loadFile(e.target.files[0]); e.target.value = ''; });
+  let dragDepth = 0;
+  window.addEventListener('dragenter', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { dragDepth++; $('dropfx').classList.add('on'); } });
+  window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('dropfx').classList.remove('on'); });
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => { e.preventDefault(); dragDepth = 0; $('dropfx').classList.remove('on'); loadFile(e.dataTransfer && e.dataTransfer.files[0]); });
+  window.addEventListener('paste', (e) => {
+    const it = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.type.startsWith('image/'));
+    if (it) loadFile(it.getAsFile());
+  });
+
+  $('ex-svg').addEventListener('click', () => saveFile(baseName() + '.svg', buildSVG(), 'image/svg+xml'));
+  $('ex-dxf').addEventListener('click', () => saveFile(baseName() + '.dxf', buildDXF(), 'application/dxf'));
+  $('ex-pdf').addEventListener('click', () => saveFile(baseName() + '.pdf', buildPDF(), 'application/pdf'));
+  $('ex-copy').addEventListener('click', async () => {
+    const txt = buildDXF();
+    try { await navigator.clipboard.writeText(txt); say('DXF copiato. Incollalo in un file di testo e salvalo con estensione .dxf.'); }
+    catch (e) { say('Il browser non permette di copiare da qui. Usa il pulsante DXF.'); }
+  });
+
+  /* si parte con un esempio già caricato, in modalità Architettura */
+  setMode('arch');
+  initEngine();
+  setSource(makeSample(), 'esempio-tempio.png');
+})();
+</script>
+
+</html>
