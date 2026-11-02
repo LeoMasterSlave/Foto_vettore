@@ -87,6 +87,7 @@ modelli = {'entrambi': ('sdxl', 'sd15'), 'sdxl': ('sdxl',), 'sd15': ('sd15',)}.g
 _r = RIQUADRO.strip().lower()
 box = 'tutta' if _r in ('tutta', 'tutto', 'intera') else ([int(v) for v in _r.replace(' ', '').split(',')] if _r else None)
 print('Modelli:', modelli or 'solo Fotovettore attuale', '| semi:', SEMI, '| passi:', PASSI)
+print('Riquadro:', 'TUTTA LA FOTO' if box == 'tutta' else (box or 'automatico'), '(valore letto: %r)' % RIQUADRO)
 ''', titolo=True)
 
 code('''

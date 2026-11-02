@@ -18,7 +18,8 @@ SVILUPPO = os.path.dirname(QUI)
 REPO = os.path.dirname(SVILUPPO)
 MODELLI = os.environ.get('FV_MODELLI', os.path.join(REPO, 'prova-ai', 'modelli'))
 NODE = os.environ.get('FV_NODE', 'node')
-LATO_MOTORE = 900  # stessa risoluzione della regione nella versione dev
+LATO_MOTORE = 900
+RICHIESTO = {}  # riquadro chiesto dall'utente per ogni foto (salvato in risultati.json)  # stessa risoluzione della regione nella versione dev
 LAYERS = [('STRUTTURA', 7, False), ('ELEMENTI', 5, False), ('DETTAGLI', 8, False), ('RICOSTRUZIONI', 30, True)]
 COLORI = {0: (0, 0, 0), 1: (200, 60, 20), 2: (150, 150, 150), 3: (0, 120, 230)}  # BGR, come render.py
 
@@ -725,11 +726,18 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
     os.makedirs(D, exist_ok=True)
     tempi = {}
     rgb = carica_foto(foto)
+    richiesto = box
     if box == 'tutta':  # foto gia' ritagliata sul prospetto
         box = [0, 0, rgb.shape[1], rgb.shape[0]]
+        log('Riquadro: tutta la foto', box)
     if box is None:
         box = rileva_riquadro(rgb)
-        log('Riquadro automatico (motore Fotovettore):', box)
+        quota = (box[2] - box[0]) * (box[3] - box[1]) / (rgb.shape[0] * rgb.shape[1])
+        log('Riquadro automatico (motore Fotovettore):', box, '- %.0f%% della foto' % (100 * quota))
+        # detect() si aggrappa a volte a un solo elemento marcato (tirante, lesena): striscia minuscola
+        if quota < 0.25 or min(box[2] - box[0], box[3] - box[1]) < 0.3 * min(rgb.shape[:2]):
+            log('  ATTENZIONE: riquadro troppo piccolo, probabilmente sbagliato. Uso tutta la foto.')
+            box = [0, 0, rgb.shape[1], rgb.shape[0]]
     prev = rgb.copy()
     cv2.rectangle(prev, tuple(box[:2]), tuple(box[2:]), (255, 40, 40), max(2, rgb.shape[1] // 300))
     salva(os.path.join(D, '00_foto_e_riquadro.jpg'), prev)
@@ -791,6 +799,7 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
         grezzi[C.nome] = best[2] < 0.5
         neurali[C.nome] = best[2]
 
+    RICHIESTO[os.path.basename(foto)] = richiesto if richiesto is not None else 'automatico'
     return _analizza(D, os.path.basename(foto), rgb.shape, box, reg, ev, neur_id, forme, usa_sam, grezzi, neurali,
                      semi_info, tempi, larghezza_mm, photocad, passi, t0)
 
@@ -921,7 +930,7 @@ def _analizza(D, nome_foto, foto_shape, box, reg, ev, neur_id, forme, usa_sam, g
     salva(os.path.join(D, 'confronto_vettoriali.jpg'), griglia(blocchi))
 
     tempi['totale_s'] = round(time.time() - t0, 1)
-    info = {'foto': nome_foto, 'riquadro': box, 'regione_px': [rw, rh], 'forme_sam': len(forme),
+    info = {'foto': nome_foto, 'riquadro': box, 'riquadro_richiesto': RICHIESTO.get(nome_foto), 'regione_px': [rw, rh], 'forme_sam': len(forme),
             'riferimento_aperture': len(rif_ap), 'riferimento_archi': len(rif_ar), 'tempi': tempi,
             'modelli': semi_info, 'passi': passi, 'larghezza_mm': larghezza_mm}
     with open(os.path.join(D, 'risultati.json'), 'w') as fh:
