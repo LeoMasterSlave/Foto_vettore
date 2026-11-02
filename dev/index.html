@@ -1,0 +1,2907 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fotovettore">
+<meta name="description" content="Fotovettore: da foto di edifici a disegni CAD (DXF, SVG, PDF) con AI locale nel browser.">
+<title>Fotovettore</title>
+<style>
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f7f7fa;
+  --fill: rgba(118, 118, 128, 0.12);
+  --fill-2: rgba(118, 118, 128, 0.2);
+  --label: #1c1c1e;
+  --label-2: rgba(60, 60, 67, 0.72);
+  --label-3: rgba(60, 60, 67, 0.5);
+  --sep: rgba(60, 60, 67, 0.16);
+  --accent: #0a60d8;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(10, 96, 216, 0.12);
+  --danger: #d70015;
+  --canvas: #e6e8ec;
+  --sheet: #ffffff;
+  --grid: rgba(60, 70, 90, 0.07);
+  --l0: #111418;
+  --l1: #0a60d8;
+  --l2: #8a8f98;
+  --l3: #e07800;
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 20px rgba(0, 0, 0, 0.1);
+  --r: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --surface: #1c1c1e; --surface-2: #232326; --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.36);
+    --label: #f2f2f7; --label-2: rgba(235, 235, 245, 0.7); --label-3: rgba(235, 235, 245, 0.45); --sep: rgba(84, 84, 88, 0.6);
+    --accent: #3d8bff; --accent-ink: #ffffff; --accent-soft: rgba(61, 139, 255, 0.18); --danger: #ff453a;
+    --canvas: #0c0d10; --sheet: #16181c; --grid: rgba(200, 210, 230, 0.06);
+    --l0: #f2f4f7; --l1: #5aa2ff; --l2: #7c828c; --l3: #ffa23a;
+    --glass: rgba(36, 36, 40, 0.78); --glass-edge: rgba(255, 255, 255, 0.08); --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --surface: #1c1c1e; --surface-2: #232326; --fill: rgba(118, 118, 128, 0.24); --fill-2: rgba(118, 118, 128, 0.36);
+  --label: #f2f2f7; --label-2: rgba(235, 235, 245, 0.7); --label-3: rgba(235, 235, 245, 0.45); --sep: rgba(84, 84, 88, 0.6);
+  --accent: #3d8bff; --accent-ink: #ffffff; --accent-soft: rgba(61, 139, 255, 0.18); --danger: #ff453a;
+  --canvas: #0c0d10; --sheet: #16181c; --grid: rgba(200, 210, 230, 0.06);
+  --l0: #f2f4f7; --l1: #5aa2ff; --l2: #7c828c; --l3: #ffa23a;
+  --glass: rgba(36, 36, 40, 0.78); --glass-edge: rgba(255, 255, 255, 0.08); --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--label); font: 15px/1.4 var(--font); -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+body { overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; }
+
+/* ---------- barra superiore ---------- */
+.top { position: relative; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border-bottom: 0.5px solid var(--sep); }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; min-width: 0; }
+.brand .mark { width: 28px; height: 28px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+.brand .mark rect { fill: var(--accent-soft); stroke: none; }
+.brand .mark circle { fill: var(--accent); stroke: none; }
+.badge { font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 6px; }
+.top-actions { display: flex; gap: 6px; }
+
+/* ---------- pulsanti ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 0; border-radius: 11px; background: transparent; font-weight: 600; font-size: 15px; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; transition: transform 0.1s ease-out, background-color 0.15s, opacity 0.15s; }
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.38; cursor: default; }
+.btn.filled { background: var(--accent); color: var(--accent-ink); }
+.btn.filled:active:not(:disabled) { filter: brightness(0.92); }
+.btn.tinted { background: var(--accent-soft); color: var(--accent); }
+.btn.gray { background: var(--fill); color: var(--label); }
+.btn.plain { color: var(--accent); padding: 0 10px; }
+.btn.plain.danger { color: var(--danger); }
+.btn.lg { min-height: 50px; padding: 0 22px; font-size: 17px; border-radius: 13px; }
+.btn.sm { min-height: 36px; font-size: 14px; }
+.btn.wide { width: 100%; }
+@media (hover: hover) { .btn.plain:hover:not(:disabled), .btn.gray:hover:not(:disabled) { background: var(--fill); } .btn.tinted:hover:not(:disabled) { background: var(--fill-2); } }
+
+/* ---------- area di lavoro ---------- */
+.work { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.viewport { position: relative; overflow: hidden; background: var(--canvas); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; transform-origin: 0 0; will-change: transform; }
+.viewport.editing #cv { cursor: crosshair; }
+.viewport.grabbing #cv { cursor: grabbing; }
+
+.glass { background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%); box-shadow: var(--shadow), inset 0 0.5px 0 var(--glass-edge); }
+@media (prefers-reduced-transparency: reduce) { .glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+.float-top { position: absolute; top: 12px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+.float-top > * { pointer-events: auto; }
+.float-side { position: absolute; top: 12px; right: max(12px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+.round { width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; color: var(--label); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform 0.1s ease-out; }
+.round:active:not(:disabled) { transform: scale(0.94); }
+.round:disabled { opacity: 0.4; }
+.round[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.zoom-pill { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: 12px; z-index: 5; padding: 6px 10px; border-radius: 999px; font: 500 12px var(--mono); color: var(--label-2); font-variant-numeric: tabular-nums; }
+
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px; background: var(--fill); }
+.seg.glass { background: var(--glass); }
+.seg button { border: 0; background: transparent; min-height: 34px; padding: 0 14px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--label-2); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color 0.18s, color 0.18s; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--label); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.seg.small button { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.seg.full { display: flex; width: 100%; }
+.seg.full button { flex: 1; }
+
+.editbar { position: absolute; left: 50%; transform: translateX(-50%); top: 62px; z-index: 6; display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 14px; border-radius: 16px; max-width: calc(100% - 24px); }
+.editbar #sel-info { font-size: 13px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; }
+
+.empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); z-index: 4; }
+.empty-card { max-width: 420px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.empty-card h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.12; letter-spacing: -0.02em; font-weight: 700; text-wrap: balance; }
+.empty-card p { margin: 0; color: var(--label-2); font-size: 15px; text-wrap: pretty; }
+.empty-card .hint { font-size: 13px; color: var(--label-3); }
+.empty-art { width: 132px; height: 92px; fill: none; stroke: var(--l1); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.empty-art rect { stroke: var(--sep); fill: var(--sheet); }
+.empty-art .dash { stroke: var(--l3); stroke-dasharray: 4 4; }
+.drop { position: absolute; inset: 10px; z-index: 30; border: 2px dashed var(--accent); border-radius: 18px; display: grid; place-items: center; background: var(--accent-soft); font-weight: 600; color: var(--accent); }
+
+/* ---------- pannello: foglio in basso (iPhone), barra laterale (desktop) ---------- */
+.panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; flex-direction: column; max-height: calc(100% - 8px);
+  background: var(--surface); border-radius: 18px 18px 0 0; box-shadow: 0 -1px 0 var(--sep), 0 -10px 30px rgba(0, 0, 0, 0.12);
+  transform: translate3d(0, var(--sheet-y, 0px), 0); will-change: transform; }
+.grab { flex: none; height: 22px; display: grid; place-items: center; cursor: grab; touch-action: none; }
+.grab i { width: 36px; height: 5px; border-radius: 3px; background: var(--fill-2); }
+.panel-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 16px) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--surface-2); border-radius: var(--r); padding: 14px; }
+.card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--label-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.card h3 { margin: 14px 0 8px; font-size: 13px; font-weight: 600; color: var(--label-2); }
+.step { background: transparent; padding: 4px 0 2px; }
+.step .title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.2; }
+.step .sub { margin: 4px 0 12px; color: var(--label-2); font-size: 14px; text-wrap: pretty; }
+.step .actions { display: flex; gap: 8px; margin-top: 12px; }
+.step .actions .btn { flex: 1; }
+.step .meta { margin-top: 8px; font-size: 12px; color: var(--label-3); }
+.mode-desc { margin: 8px 2px 0; font-size: 13px; color: var(--label-2); min-height: 2.8em; }
+.progress { height: 6px; border-radius: 3px; background: var(--fill); overflow: hidden; margin: 12px 0 6px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width 0.25s ease-out; }
+.prog-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 2px; }
+.summary div { background: var(--surface-2); border-radius: 12px; padding: 10px; }
+.summary b { display: block; font: 600 20px var(--font); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.summary span { font-size: 12px; color: var(--label-2); }
+
+.layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.layers li { display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 0.5px solid var(--sep); }
+.layers li:first-child { border-top: 0; }
+.layers .sw { width: 26px; height: 0; border-top: 2px solid; flex: none; }
+.layers .nm { flex: 1; min-width: 0; }
+.layers .nm small { display: block; color: var(--label-3); font-size: 12px; }
+.layers .ct { font: 500 13px var(--mono); color: var(--label-2); font-variant-numeric: tabular-nums; }
+.switch { position: relative; width: 51px; height: 31px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: 16px; background: var(--fill-2); transition: background-color 0.2s; pointer-events: none; }
+.switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1); }
+.switch input:checked + span { background: #34c759; }
+.switch input:checked + span::after { transform: translateX(20px); }
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.field > span:first-child { font-size: 15px; }
+.field input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.field output { font: 500 12px var(--mono); color: var(--label-2); min-width: 4.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.field select { max-width: 60%; background: var(--fill); border: 0; border-radius: 9px; padding: 8px 10px; }
+.unit { display: inline-flex; align-items: center; gap: 6px; background: var(--fill); border-radius: 10px; padding: 0 10px; }
+.unit input { width: 7.5em; border: 0; background: transparent; padding: 10px 0; text-align: right; font: 500 15px var(--mono); font-variant-numeric: tabular-nums; }
+.unit input:focus { outline: none; }
+.unit em { font-style: normal; color: var(--label-2); font-size: 14px; }
+.foot { margin: 6px 0 10px; font-size: 12px; color: var(--label-3); text-wrap: pretty; }
+.export-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0; font-size: 13px; }
+.stats dt { color: var(--label-2); }
+.stats dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.adv summary { list-style: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer; min-height: 28px; }
+.adv summary::-webkit-details-marker { display: none; }
+.adv summary h2 { margin: 0; }
+.adv .chev { width: 16px; height: 16px; fill: none; stroke: var(--label-3); stroke-width: 2; transition: transform 0.2s; }
+.adv[open] .chev { transform: rotate(90deg); }
+.adv-body { margin-top: 6px; }
+.legal { font-size: 11px; color: var(--label-3); text-align: center; margin: 2px 8px 8px; text-wrap: pretty; }
+
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); transform: translateX(-50%); z-index: 50; padding: 10px 16px; border-radius: 14px; background: rgba(28, 28, 30, 0.92); color: #fff; font-size: 14px; max-width: calc(100% - 32px); box-shadow: var(--shadow); }
+
+.desk-only { display: none; }
+@media (hover: hover) and (pointer: fine) { .desk-only { display: block; } }
+
+/* ---------- schermi larghi: barra laterale ---------- */
+@media (min-width: 900px) {
+  .work { grid-template-columns: minmax(0, 1fr) 360px; }
+  .panel { position: relative; inset: auto; min-height: 0; transform: none !important; border-radius: 0; max-height: none; box-shadow: none; border-left: 0.5px solid var(--sep); background: var(--bg); }
+  .grab { display: none; }
+  .panel-scroll { padding: 16px; }
+  .card { background: var(--surface); }
+  .summary div { background: var(--surface); }
+  .step { background: var(--surface); padding: 16px; border-radius: var(--r); }
+  .btn { min-height: 36px; font-size: 14px; border-radius: 9px; }
+  .btn.lg { min-height: 44px; font-size: 16px; }
+  .round { width: 38px; height: 38px; }
+  .row { min-height: 36px; }
+  .layers li { min-height: 40px; }
+}
+@media (max-width: 899px) {
+  .top .lbl { display: none; }
+  .top .btn { min-width: 44px; padding: 0 10px; }
+  .editbar { top: auto; bottom: calc(var(--peek, 200px) + 12px); }
+}
+@media (max-width: 380px) { .seg button { padding: 0 10px; } }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; } }
+@media (prefers-contrast: more) { :root { --sep: rgba(60, 60, 67, 0.5); --label-2: rgba(60, 60, 67, 0.95); } }
+
+@media (max-width: 899px) { body.is-empty .panel { display: none; } }
+body.is-empty .float-top, body.is-empty .float-side, body.is-empty .zoom-pill { display: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 2.5-2.5L20 17"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M7 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l8.5 4.5L12 13 3.5 8.5z"/><path d="M3.5 12.5L12 17l8.5-4.5"/><path d="M3.5 16.5L12 21l8.5-4.5"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5z"/><path d="M13.5 7l3 3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4.5 11.5 9 16"/><path d="M5 11.5h9.5a5 5 0 0 1 0 10H11"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4L3.5 7.5 7 11"/><path d="M4 7.5h12.5"/><path d="M17 13l3.5 3.5L17 20"/><path d="M20 16.5H7.5"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand" aria-label="Fotovettore">
+      <svg class="mark" viewBox="0 0 28 28" aria-hidden="true"><rect x="2.5" y="2.5" width="23" height="23" rx="6.5"/><path d="M7.5 20.5V11l6.5-4 6.5 4v9.5"/><path d="M11.5 20.5v-5h5v5"/><circle cx="7.5" cy="20.5" r="1.4"/><circle cx="20.5" cy="20.5" r="1.4"/><circle cx="14" cy="7" r="1.4"/></svg>
+      <span>Fotovettore</span><em class="badge">Anteprima</em>
+    </div>
+    <div class="top-actions">
+      <button class="btn plain" id="b-open" type="button" title="Apri una foto (⌘O)"><svg class="ic"><use href="#i-photo"/></svg><span class="lbl">Apri</span></button>
+      <button class="btn tinted" id="b-export" type="button" disabled title="Esporta"><svg class="ic"><use href="#i-share"/></svg><span class="lbl">Esporta</span></button>
+    </div>
+    <input id="file" type="file" accept="image/*" hidden>
+  </header>
+
+  <main class="work">
+    <section class="viewport" id="vp" aria-label="Area di disegno">
+      <canvas id="cv"></canvas>
+
+      <div class="float-top" id="ftop">
+        <div class="seg glass" role="group" aria-label="Vista" id="seg-view">
+          <button type="button" data-view="draw" aria-pressed="true">Disegno</button>
+          <button type="button" data-view="photo" aria-pressed="false">Foto</button>
+          <button type="button" data-view="over" aria-pressed="false">Insieme</button>
+        </div>
+      </div>
+      <div class="float-side" id="fside">
+        <button class="round glass" id="b-fit" type="button" aria-label="Adatta alla finestra" title="Adatta (F)"><svg class="ic"><use href="#i-fit"/></svg></button>
+        <button class="round glass" id="b-zin" type="button" aria-label="Ingrandisci" title="Ingrandisci (+)"><svg class="ic"><use href="#i-plus"/></svg></button>
+        <button class="round glass" id="b-zout" type="button" aria-label="Riduci" title="Riduci (−)"><svg class="ic"><use href="#i-minus"/></svg></button>
+        <button class="round glass" id="b-edit" type="button" aria-label="Modifica il disegno" aria-pressed="false" title="Modifica (M)" disabled><svg class="ic"><use href="#i-pencil"/></svg></button>
+      </div>
+      <div class="zoom-pill glass" id="zoom" aria-live="off">100%</div>
+
+      <div class="editbar glass" id="editbar" hidden>
+        <span id="sel-info">Tocca una linea per selezionarla</span>
+        <button class="btn plain sm" id="b-layer" type="button" disabled><svg class="ic"><use href="#i-swap"/></svg><span class="lbl">Livello</span></button>
+        <button class="btn plain sm danger" id="b-del" type="button" disabled><svg class="ic"><use href="#i-trash"/></svg><span class="lbl">Elimina</span></button>
+        <button class="btn plain sm" id="b-undo" type="button" disabled><svg class="ic"><use href="#i-undo"/></svg><span class="lbl">Annulla</span></button>
+      </div>
+
+      <div class="empty" id="empty">
+        <div class="empty-card">
+          <svg class="empty-art" viewBox="0 0 120 84" aria-hidden="true"><rect x="1" y="1" width="118" height="82" rx="10"/><path d="M16 70V36l22-14 22 14v34"/><path d="M28 70V54a10 10 0 0 1 20 0v16"/><path d="M60 70h44M60 50h44M76 30h20v40"/><path class="dash" d="M10 76h100"/></svg>
+          <h1>Da foto a disegno CAD</h1>
+          <p>Scatta o scegli la foto frontale di un edificio. Fotovettore riconosce aperture, archi, cornici e conci e li prepara per il DXF.</p>
+          <button class="btn filled lg" id="b-pick" type="button"><svg class="ic"><use href="#i-photo"/></svg>Scegli una foto</button>
+          <p class="hint desk-only">Oppure trascinala qui o incollala con ⌘V.</p>
+          <button class="btn plain sm" id="b-sample" type="button">Prova con un esempio</button>
+        </div>
+      </div>
+      <div class="drop" id="drop" hidden><span>Rilascia la foto</span></div>
+    </section>
+
+    <aside class="panel" id="panel" aria-label="Pannello">
+      <div class="grab" id="grab" aria-hidden="true"><i></i></div>
+      <div class="panel-scroll" id="pscroll">
+        <section class="card step" id="step" aria-live="polite"></section>
+
+        <section class="card" id="sec-layers">
+          <h2>Livelli</h2>
+          <ul class="layers" id="layers"></ul>
+        </section>
+
+        <section class="card" id="sec-export">
+          <h2>Esporta</h2>
+          <label class="row field">
+            <span>Larghezza reale</span>
+            <span class="unit"><input id="wmm" type="number" inputmode="decimal" min="1" max="1000000" step="1" value="10000"><em>mm</em></span>
+          </label>
+          <p class="foot">La foto non contiene la scala: indica la larghezza reale del riquadro convertito, oppure scala il disegno nel CAD.</p>
+          <div class="export-grid">
+            <button class="btn filled" id="ex-dxf" type="button" disabled>DXF</button>
+            <button class="btn gray" id="ex-svg" type="button" disabled>SVG</button>
+            <button class="btn gray" id="ex-pdf" type="button" disabled>PDF</button>
+          </div>
+          <button class="btn plain sm" id="ex-copy" type="button" disabled>Copia il DXF negli appunti</button>
+          <dl class="stats" id="stats"></dl>
+        </section>
+
+        <details class="card adv" id="adv">
+          <summary><h2>Impostazioni avanzate</h2><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></summary>
+          <div class="adv-body">
+            <h3>Conversione AI</h3>
+            <label class="row field"><span>Risoluzione di lavoro</span>
+              <select id="ai-res"><option value="700">700 px · più veloce</option><option value="900" selected>900 px · consigliata</option><option value="1200">1200 px · più dettagli</option></select></label>
+            <label class="row field"><span>Sensibilità linee</span><input id="ai-thr" type="range" min="30" max="70" value="50"><output id="o-aithr">50</output></label>
+            <h3>Metodo classico (senza AI)</h3>
+            <div class="seg small" role="group" aria-label="Metodo classico" id="seg-classic">
+              <button type="button" data-cmode="arch" aria-pressed="true">Architettura</button>
+              <button type="button" data-cmode="edges" aria-pressed="false">Contorni</button>
+              <button type="button" data-cmode="shape" aria-pressed="false">Sagoma</button>
+            </div>
+            <label class="check"><input id="autoall" type="checkbox" checked> Regolazioni automatiche</label>
+            <label class="row field"><span>Sensibilità</span><input id="sens" type="range" min="0" max="100" value="45"><output id="o-sens"></output></label>
+            <label class="row field"><span>Levigatura</span><input id="blur" type="range" min="0" max="40" value="16"><output id="o-blur"></output></label>
+            <label class="row field"><span>Semplificazione</span><input id="simp" type="range" min="0" max="40" value="15"><output id="o-simp"></output></label>
+            <label class="row field"><span>Tratti corti</span><input id="minlen" type="range" min="0" max="120" value="30"><output id="o-min"></output></label>
+            <label class="row field"><span>Unisci linee</span><input id="merge" type="range" min="0" max="80" value="30"><output id="o-merge"></output></label>
+            <label class="check"><input id="arcs" type="checkbox" checked> Riconosci archi</label>
+            <label class="check"><input id="straight" type="checkbox" checked> Raddrizza orizzontali e verticali</label>
+            <div id="f-shape" hidden>
+              <label class="check"><input id="auto" type="checkbox" checked> Soglia automatica</label>
+              <label class="row field"><span>Soglia</span><input id="thr" type="range" min="5" max="250" value="128" disabled><output id="o-thr"></output></label>
+              <label class="check"><input id="inv" type="checkbox"> Sagome chiare su sfondo scuro</label>
+            </div>
+            <h3>Prestazioni</h3>
+            <p class="foot" id="perf">—</p>
+          </div>
+        </details>
+        <p class="legal">I modelli AI (Informative Drawings, MIT · MobileSAM, Apache-2.0) girano nel tuo browser: la foto non lascia il dispositivo.</p>
+      </div>
+    </aside>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script>
+(function () {
+  function makeEngine() {
+    let IMG = null, PRE = { key: '', g: null };
+    function setImage(W, H, gray) { IMG = { W, H, gray }; PRE = { key: '', g: null }; }
+
+  /* ---------- image processing ---------- */
+  function gaussBlur(src, W, H, sigma) {
+    if (sigma < 0.3) return Float32Array.from(src);
+    const r = Math.ceil(sigma * 3), k = new Float32Array(2 * r + 1);
+    let sum = 0;
+    for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + r]; }
+    for (let i = 0; i < k.length; i++) k[i] /= sum;
+    const tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        let a = 0;
+        for (let i = -r; i <= r; i++) { let xx = x + i; xx = xx < 0 ? 0 : xx >= W ? W - 1 : xx; a += src[row + xx] * k[i + r]; }
+        tmp[row + x] = a;
+      }
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let a = 0;
+        for (let i = -r; i <= r; i++) { let yy = y + i; yy = yy < 0 ? 0 : yy >= H ? H - 1 : yy; a += tmp[yy * W + x] * k[i + r]; }
+        out[y * W + x] = a;
+      }
+    }
+    return out;
+  }
+
+  function otsu(g) {
+    const h = new Float64Array(256);
+    for (let i = 0; i < g.length; i++) { let v = Math.round(g[i]); v = v < 0 ? 0 : v > 255 ? 255 : v; h[v]++; }
+    let total = g.length, sumAll = 0;
+    for (let i = 0; i < 256; i++) sumAll += i * h[i];
+    let wB = 0, sumB = 0, best = 0, thr = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += h[t]; if (!wB) continue;
+      const wF = total - wB; if (!wF) break;
+      sumB += t * h[t];
+      const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+      const between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; thr = t; }
+    }
+    return thr;
+  }
+
+  /* Canny edges -> boolean map */
+  function canny(g, W, H, sens) {
+    const N = W * H, mag = new Float32Array(N), dq = new Uint8Array(N);
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
+        const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
+        mag[i] = Math.hypot(gx, gy);
+        let a = Math.atan2(gy, gx) * 57.29578; if (a < 0) a += 180;
+        dq[i] = (a < 22.5 || a >= 157.5) ? 0 : a < 67.5 ? 1 : a < 112.5 ? 2 : 3;
+      }
+    }
+    let mx = 0; for (let i = 0; i < N; i++) if (mag[i] > mx) mx = mag[i];
+    if (mx <= 0) return new Uint8Array(N);
+    const bins = new Uint32Array(1001);
+    for (let i = 0; i < N; i++) bins[Math.min(1000, (mag[i] / mx * 1000) | 0)]++;
+    let acc = 0, p = 0; const target = N * 0.985;
+    for (let b = 0; b <= 1000; b++) { acc += bins[b]; if (acc >= target) { p = (b + 1) / 1000 * mx; break; } }
+    const s = sens / 100;
+    const hi = Math.max(4, p * (1.0 - 0.85 * s)), lo = hi * 0.4;
+    const e = new Uint8Array(N);
+    for (let y = 1; y < H - 1; y++) {
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x, m = mag[i];
+        if (m < lo) continue;
+        let a, b;
+        switch (dq[i]) {
+          case 0: a = mag[i - 1]; b = mag[i + 1]; break;
+          case 1: a = mag[i - W - 1]; b = mag[i + W + 1]; break;
+          case 2: a = mag[i - W]; b = mag[i + W]; break;
+          default: a = mag[i - W + 1]; b = mag[i + W - 1];
+        }
+        if (m >= a && m >= b) e[i] = m >= hi ? 2 : 1;
+      }
+    }
+    const out = new Uint8Array(N), stack = [];
+    for (let i = 0; i < N; i++) if (e[i] === 2) { out[i] = 1; stack.push(i); }
+    const nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+    while (stack.length) {
+      const c = stack.pop();
+      for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (e[j] && !out[j]) { out[j] = 1; stack.push(j); } }
+    }
+    out.mag = mag; out.hi = hi;
+    return out;
+  }
+
+  /* Edge pixels -> polylines */
+  function traceChains(E, W, H, minLen) {
+    const N = W * H, vis = new Uint8Array(N), chains = [];
+    const nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+    const walk = (start) => {
+      const out = []; let cur = start;
+      for (;;) {
+        let nx = -1;
+        for (let k = 0; k < 8; k++) { const j = cur + nb[k]; if (E[j] && !vis[j]) { nx = j; break; } }
+        if (nx < 0) break;
+        vis[nx] = 1; out.push(nx); cur = nx;
+      }
+      return out;
+    };
+    const run = (start) => {
+      vis[start] = 1;
+      const f = walk(start), b = walk(start);
+      const idx = b.reverse().concat([start], f);
+      if (idx.length < Math.max(2, minLen)) return;
+      const pts = idx.map((i) => [i % W, (i / W) | 0]);
+      const a = pts[0], z = pts[pts.length - 1];
+      const closed = pts.length > 8 && Math.abs(a[0] - z[0]) <= 1 && Math.abs(a[1] - z[1]) <= 1;
+      chains.push({ pts, closed });
+    };
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (!E[i] || vis[i]) continue;
+      let d = 0; for (let k = 0; k < 8; k++) if (E[i + nb[k]]) d++;
+      if (d === 1) run(i);
+    }
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      if (E[i] && !vis[i]) run(i);
+    }
+    return chains;
+  }
+
+  /* Marching squares on a padded field; inside where value < 0 */
+  function marching(g, W, H, T, invert) {
+    const Wp = W + 2, Hp = H + 2, F = new Float32Array(Wp * Hp).fill(1);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = invert ? T - g[y * W + x] : g[y * W + x] - T;
+      F[(y + 1) * Wp + x + 1] = v === 0 ? 1e-4 : v;
+    }
+    const K = 2 * Wp * Hp, A = new Int32Array(K).fill(-1), B = new Int32Array(K).fill(-1);
+    const link = (p, q) => {
+      if (A[p] < 0) A[p] = q; else B[p] = q;
+      if (A[q] < 0) A[q] = p; else B[q] = p;
+    };
+    const Hk = (x, y) => 2 * (y * Wp + x), Vk = (x, y) => 2 * (y * Wp + x) + 1;
+    for (let y = 0; y < Hp - 1; y++) {
+      for (let x = 0; x < Wp - 1; x++) {
+        const a = F[y * Wp + x] < 0, b = F[y * Wp + x + 1] < 0, c = F[(y + 1) * Wp + x + 1] < 0, d = F[(y + 1) * Wp + x] < 0;
+        const idx = (a ? 8 : 0) | (b ? 4 : 0) | (c ? 2 : 0) | (d ? 1 : 0);
+        if (idx === 0 || idx === 15) continue;
+        const T_ = Hk(x, y), R = Vk(x + 1, y), Bo = Hk(x, y + 1), L = Vk(x, y);
+        switch (idx) {
+          case 1: case 14: link(L, Bo); break;
+          case 2: case 13: link(Bo, R); break;
+          case 3: case 12: link(L, R); break;
+          case 4: case 11: link(T_, R); break;
+          case 5: link(T_, R); link(L, Bo); break;
+          case 6: case 9: link(T_, Bo); break;
+          case 7: case 8: link(L, T_); break;
+          case 10: link(L, T_); link(Bo, R); break;
+        }
+      }
+    }
+    const pointOf = (k) => {
+      const horiz = (k & 1) === 0, cell = k >> 1, y = (cell / Wp) | 0, x = cell - y * Wp;
+      if (horiz) {
+        const v1 = F[y * Wp + x], v2 = F[y * Wp + x + 1];
+        return [x + v1 / (v1 - v2) - 1, y - 1];
+      }
+      const v1 = F[y * Wp + x], v2 = F[(y + 1) * Wp + x];
+      return [x - 1, y + v1 / (v1 - v2) - 1];
+    };
+    const seen = new Uint8Array(K), loops = [];
+    for (let s = 0; s < K; s++) {
+      if (seen[s] || A[s] < 0) continue;
+      const keys = []; let prev = -1, cur = s, ok = true;
+      for (;;) {
+        seen[cur] = 1; keys.push(cur);
+        let nx = A[cur] !== prev ? A[cur] : B[cur];
+        if (nx < 0) { ok = false; break; }
+        if (A[cur] === B[cur]) nx = A[cur];
+        prev = cur; cur = nx;
+        if (cur === s) break;
+        if (seen[cur]) { ok = false; break; }
+      }
+      if (ok && keys.length >= 3) loops.push(keys.map(pointOf));
+    }
+    return loops;
+  }
+
+  /* Douglas-Peucker */
+  function dp(p, eps) {
+    const n = p.length;
+    if (n < 3) return p.slice();
+    const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+    const st = [[0, n - 1]];
+    while (st.length) {
+      const [s, e] = st.pop();
+      const ax = p[s][0], ay = p[s][1], dx = p[e][0] - ax, dy = p[e][1] - ay, L = Math.hypot(dx, dy);
+      let md = 0, mi = -1;
+      for (let i = s + 1; i < e; i++) {
+        const d = L < 1e-9 ? Math.hypot(p[i][0] - ax, p[i][1] - ay) : Math.abs(dy * (p[i][0] - ax) - dx * (p[i][1] - ay)) / L;
+        if (d > md) { md = d; mi = i; }
+      }
+      if (md > eps && mi > 0) { keep[mi] = 1; st.push([s, mi], [mi, e]); }
+    }
+    return p.filter((_, i) => keep[i]);
+  }
+  function simplify(pts, eps, closed) {
+    if (eps <= 0 || pts.length < 4) return pts;
+    if (!closed) return dp(pts, eps);
+    let m = 0, md = -1;
+    for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > md) { md = d; m = i; } }
+    const a = dp(pts.slice(0, m + 1), eps);
+    const b = dp(pts.slice(m).concat([pts[0]]), eps);
+    return a.concat(b.slice(1, -1));
+  }
+
+
+
+    /* ----- nuove funzioni ----- */
+    function dpIdx(p, eps) {
+      const n = p.length, keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+      const st = [[0, n - 1]];
+      while (st.length) {
+        const [s, e] = st.pop();
+        const ax = p[s][0], ay = p[s][1], dx = p[e][0] - ax, dy = p[e][1] - ay, L = Math.hypot(dx, dy);
+        let md = 0, mi = -1;
+        for (let i = s + 1; i < e; i++) {
+          const d = L < 1e-9 ? Math.hypot(p[i][0] - ax, p[i][1] - ay) : Math.abs(dy * (p[i][0] - ax) - dx * (p[i][1] - ay)) / L;
+          if (d > md) { md = d; mi = i; }
+        }
+        if (md > eps && mi > 0) { keep[mi] = 1; st.push([s, mi], [mi, e]); }
+      }
+      const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(i);
+      return out;
+    }
+
+    /* Diffusione anisotropa (Perona-Malik): spiana texture e rumore, conserva i bordi forti */
+    function diffuse(g, W, H, iters) {
+      if (iters <= 0) return g;
+      let a = Float32Array.from(g), b = new Float32Array(g.length);
+      let s = 0, c = 0;
+      for (let y = 1; y < H - 1; y += 2) for (let x = 1; x < W - 1; x += 2) { const i = y * W + x; s += Math.abs(a[i + 1] - a[i]) + Math.abs(a[i + W] - a[i]); c += 2; }
+      const K = Math.max(3, 2.5 * s / Math.max(1, c)), inv = 1 / (K * K), lam = 0.2;
+      for (let it = 0; it < iters; it++) {
+        b.set(a);
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const i = y * W + x, v = a[i];
+            const dN = a[i - W] - v, dS = a[i + W] - v, dE = a[i + 1] - v, dW = a[i - 1] - v;
+            b[i] = v + lam * (dN / (1 + dN * dN * inv) + dS / (1 + dS * dS * inv) + dE / (1 + dE * dE * inv) + dW / (1 + dW * dW * inv));
+          }
+        }
+        const t = a; a = b; b = t;
+      }
+      return a;
+    }
+
+    /* Elimina i gruppi di pixel-bordo troppo piccoli (puntini di texture) */
+    function dropSmall(E, W, H, minSize) {
+      const N = W * H, seen = new Uint8Array(N), nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+      for (let s = 0; s < N; s++) {
+        if (!E[s] || seen[s]) continue;
+        const comp = [s]; seen[s] = 1;
+        for (let h = 0; h < comp.length; h++) {
+          const c = comp[h];
+          for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (j >= 0 && j < N && E[j] && !seen[j]) { seen[j] = 1; comp.push(j); } }
+        }
+        if (comp.length < minSize) for (const c of comp) E[c] = 0;
+      }
+    }
+    function chainStrength(pts, mag, W) {
+      let s = 0;
+      for (const p of pts) s += mag[Math.round(p[1]) * W + Math.round(p[0])];
+      return s / pts.length;
+    }
+
+    /* Ricuce le lacune tra estremi di tratti che proseguono nella stessa direzione */
+    function bridge(chains, gap) {
+      for (let pass = 0; pass < 3; pass++) {
+        const eps = [];
+        chains.forEach((c, ci) => {
+          if (!c || c.closed || c.pts.length < 6) return;
+          const p = c.pts, n = p.length, k = Math.min(8, n - 1);
+          const d0x = p[0][0] - p[k][0], d0y = p[0][1] - p[k][1], d1x = p[n - 1][0] - p[n - 1 - k][0], d1y = p[n - 1][1] - p[n - 1 - k][1];
+          const l0 = Math.hypot(d0x, d0y) || 1, l1 = Math.hypot(d1x, d1y) || 1;
+          eps.push({ ci, end: 0, x: p[0][0], y: p[0][1], dx: d0x / l0, dy: d0y / l0 });
+          eps.push({ ci, end: 1, x: p[n - 1][0], y: p[n - 1][1], dx: d1x / l1, dy: d1y / l1 });
+        });
+        const cell = Math.max(2, gap), grid = new Map();
+        eps.forEach((e, i) => {
+          const key = Math.floor(e.x / cell) * 100003 + Math.floor(e.y / cell);
+          (grid.get(key) || grid.set(key, []).get(key)).push(i);
+        });
+        const cands = [];
+        eps.forEach((a, i) => {
+          const cx = Math.floor(a.x / cell), cy = Math.floor(a.y / cell);
+          for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+            const arr = grid.get((cx + ox) * 100003 + (cy + oy)); if (!arr) continue;
+            for (const j of arr) {
+              if (j <= i) continue;
+              const b = eps[j];
+              if (a.ci === b.ci && chains[a.ci].pts.length < 30) continue;
+              const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+              if (d > gap) continue;
+              if (d > 1.5) {
+                const vx = dx / d, vy = dy / d;
+                if (a.dx * vx + a.dy * vy < 0.77 || -(b.dx * vx + b.dy * vy) < 0.77) continue;
+              }
+              if (a.dx * b.dx + a.dy * b.dy > -0.5) continue;
+              cands.push({ a, b, d });
+            }
+          }
+        });
+        if (!cands.length) break;
+        cands.sort((u, v) => u.d - v.d);
+        const used = new Set(); let joined = 0;
+        for (const { a, b } of cands) {
+          if (used.has(a.ci) || used.has(b.ci)) continue;
+          if (a.ci === b.ci) { chains[a.ci].closed = true; used.add(a.ci); joined++; continue; }
+          const A = chains[a.ci], B = chains[b.ci];
+          const pa = a.end === 1 ? A.pts : A.pts.slice().reverse();
+          const pb = b.end === 0 ? B.pts : B.pts.slice().reverse();
+          const na = A.pts.length, nb = B.pts.length;
+          chains[a.ci] = { pts: pa.concat(pb), closed: false, str: (A.str * na + B.str * nb) / (na + nb) };
+          chains[b.ci] = null; used.add(a.ci); used.add(b.ci); joined++;
+        }
+        if (!joined) break;
+      }
+      return chains.filter(Boolean);
+    }
+
+    /* Media mobile: toglie la scalettatura dei pixel senza spostare gli estremi */
+    function smoothPts(p, closed, w) {
+      const n = p.length; if (n < 5 || w < 1) return p;
+      const o = new Array(n);
+      for (let i = 0; i < n; i++) {
+        let sx = 0, sy = 0, c = 0;
+        for (let k = -w; k <= w; k++) {
+          let j = i + k;
+          if (closed) j = ((j % n) + n) % n; else if (j < 0 || j >= n) continue;
+          sx += p[j][0]; sy += p[j][1]; c++;
+        }
+        o[i] = [sx / c, sy / c];
+      }
+      if (!closed) { o[0] = p[0]; o[n - 1] = p[n - 1]; }
+      return o;
+    }
+
+    /* Cerchio ai minimi quadrati (Kasa) sui punti i..j; restituisce null se non è un arco credibile */
+    function arcFit(q, i, j, tol, strict) {
+      const N = j - i + 1; if (N < 7) return null;
+      let mx = 0, my = 0;
+      for (let k = i; k <= j; k++) { mx += q[k][0]; my += q[k][1]; }
+      mx /= N; my /= N;
+      let Suu = 0, Svv = 0, Suv = 0, Suuu = 0, Svvv = 0, Suvv = 0, Svuu = 0;
+      for (let k = i; k <= j; k++) {
+        const u = q[k][0] - mx, v = q[k][1] - my;
+        Suu += u * u; Svv += v * v; Suv += u * v; Suuu += u * u * u; Svvv += v * v * v; Suvv += u * v * v; Svuu += v * u * u;
+      }
+      const det = Suu * Svv - Suv * Suv;
+      if (Math.abs(det) < 1e-9) return null;
+      const b1 = 0.5 * (Suuu + Suvv), b2 = 0.5 * (Svvv + Svuu);
+      const uc = (b1 * Svv - b2 * Suv) / det, vc = (Suu * b2 - Suv * b1) / det;
+      const cx = mx + uc, cy = my + vc, r = Math.sqrt(uc * uc + vc * vc + (Suu + Svv) / N);
+      if (!(r > 3 * tol) || r > 4000) return null;
+      let prev = Math.atan2(q[i][1] - cy, q[i][0] - cx); const a0 = prev;
+      let sum = 0, abs = 0;
+      for (let k = i; k <= j; k++) {
+        const e = Math.abs(Math.hypot(q[k][0] - cx, q[k][1] - cy) - r);
+        if (e > tol) return null;
+        if (k > i) {
+          const a = Math.atan2(q[k][1] - cy, q[k][0] - cx);
+          let d = a - prev;
+          if (d > Math.PI) d -= 2 * Math.PI; else if (d < -Math.PI) d += 2 * Math.PI;
+          sum += d; abs += Math.abs(d); prev = a;
+        }
+      }
+      const sw = Math.abs(sum);
+      if (sw > 3.4 || abs > sw * 1.2 + 0.05) return null;
+      if (strict) {
+        const chord = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]);
+        const sag = r - Math.sqrt(Math.max(0, r * r - chord * chord / 4));
+        if (sw < 0.35 || (sw < Math.PI && sag < 1.5 * tol)) return null;
+      }
+      return { cx, cy, r, a0, sum };
+    }
+
+    /* Spezza una catena di punti in linee rette e archi di cerchio */
+    function fitChain(pts, closed, tol, useArcs) {
+      let q = pts;
+      if (closed && q.length > 6) {
+        const qq = q.concat([q[0]]);
+        const idx = dpIdx(qq, Math.max(2 * tol, 2));
+        let best = 0.35, bi = 0;
+        for (let t = 1; t < idx.length - 1; t++) {
+          const p0 = qq[idx[t - 1]], p1 = qq[idx[t]], p2 = qq[idx[t + 1]];
+          const a1 = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]), a2 = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+          let d = Math.abs(a2 - a1); if (d > Math.PI) d = 2 * Math.PI - d;
+          if (d > best) { best = d; bi = idx[t]; }
+        }
+        q = q.slice(bi).concat(q.slice(0, bi)); q.push([q[0][0], q[0][1]]);
+      } else if (closed) {
+        q = q.concat([q[0]]);
+      }
+      const n = q.length, segs = [];
+      if (n < 2) return segs;
+      const lineOK = (i, j) => {
+        const ax = q[i][0], ay = q[i][1], dx = q[j][0] - ax, dy = q[j][1] - ay, L = Math.hypot(dx, dy);
+        for (let k = i + 1; k < j; k++) {
+          const d = L < 1e-9 ? Math.hypot(q[k][0] - ax, q[k][1] - ay) : Math.abs(dy * (q[k][0] - ax) - dx * (q[k][1] - ay)) / L;
+          if (d > tol) return false;
+        }
+        return true;
+      };
+      const arcOK = (i, j) => !!arcFit(q, i, j, tol, false);
+      const longest = (i, lo, ok) => {
+        let step = 2, hi = -1;
+        for (;;) {
+          const t = Math.min(n - 1, lo + step);
+          if (t === lo) break;
+          if (ok(i, t)) { lo = t; step *= 2; } else { hi = t; break; }
+        }
+        if (hi < 0) return lo;
+        while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ok(i, m)) lo = m; else hi = m; }
+        return lo;
+      };
+      const refine = (i, j) => {
+        const N = j - i + 1;
+        if (N < 4) return { x0: q[i][0], y0: q[i][1], x1: q[j][0], y1: q[j][1] };
+        let cx = 0, cy = 0;
+        for (let k = i; k <= j; k++) { cx += q[k][0]; cy += q[k][1]; }
+        cx /= N; cy /= N;
+        let sxx = 0, syy = 0, sxy = 0;
+        for (let k = i; k <= j; k++) { const u = q[k][0] - cx, v = q[k][1] - cy; sxx += u * u; syy += v * v; sxy += u * v; }
+        const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+        const t0 = (q[i][0] - cx) * ux + (q[i][1] - cy) * uy, t1 = (q[j][0] - cx) * ux + (q[j][1] - cy) * uy;
+        return { x0: cx + ux * t0, y0: cy + uy * t0, x1: cx + ux * t1, y1: cy + uy * t1 };
+      };
+      let i = 0;
+      while (i < n - 1) {
+        const jl = longest(i, i + 1, lineOK);
+        let ja = i;
+        if (useArcs && n - 1 - i >= 6) {
+          const s0 = Math.min(n - 1, i + 6);
+          if (arcOK(i, s0)) ja = longest(i, s0, arcOK);
+        }
+        const f = ja > jl + Math.max(2, 0.2 * (jl - i)) ? arcFit(q, i, ja, tol, true) : null;
+        if (f) {
+          const a1 = f.a0 + f.sum, am = f.a0 + f.sum / 2;
+          segs.push({
+            arc: true,
+            x0: f.cx + f.r * Math.cos(f.a0), y0: f.cy + f.r * Math.sin(f.a0),
+            x1: f.cx + f.r * Math.cos(a1), y1: f.cy + f.r * Math.sin(a1),
+            mx: f.cx + f.r * Math.cos(am), my: f.cy + f.r * Math.sin(am),
+          });
+          i = ja;
+        } else {
+          const l = refine(i, jl); l.arc = false; segs.push(l);
+          i = jl;
+        }
+      }
+      return segs;
+    }
+
+    /* Unisce i segmenti allineati e sovrapposti (anche da catene diverse) e i doppioni paralleli */
+    function mergeLines(L, tol, gap) {
+      const cosT = Math.cos(3 * Math.PI / 180);
+      for (const s of L) { s.len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0); s.ux = s.len > 1e-9 ? (s.x1 - s.x0) / s.len : 1; s.uy = s.len > 1e-9 ? (s.y1 - s.y0) / s.len : 0; s.alive = true; }
+      const order = L.map((_, i) => i).sort((a, b) => L[b].len - L[a].len);
+      const out = [];
+      for (const si of order) {
+        const s = L[si]; if (!s.alive) continue;
+        s.alive = false;
+        const ox = (s.x0 + s.x1) / 2, oy = (s.y0 + s.y1) / 2, ux = s.ux, uy = s.uy, nx = -uy, ny = ux;
+        let lo = -s.len / 2, hi = s.len / 2;
+        const cl = [s];
+        let changed = true, pass = 0;
+        while (changed && pass++ < 4) {
+          changed = false;
+          for (const t of L) {
+            if (!t.alive) continue;
+            if (Math.abs(t.ux * ux + t.uy * uy) < cosT) continue;
+            const d0 = nx * (t.x0 - ox) + ny * (t.y0 - oy), d1 = nx * (t.x1 - ox) + ny * (t.y1 - oy);
+            if (Math.abs(d0) > tol || Math.abs(d1) > tol) continue;
+            const a0 = ux * (t.x0 - ox) + uy * (t.y0 - oy), a1 = ux * (t.x1 - ox) + uy * (t.y1 - oy);
+            const tl = Math.min(a0, a1), th = Math.max(a0, a1);
+            if (tl - hi > gap || lo - th > gap) continue;
+            t.alive = false; cl.push(t);
+            if (tl < lo) lo = tl; if (th > hi) hi = th;
+            changed = true;
+          }
+        }
+        if (cl.length === 1) { out.push({ x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }); continue; }
+        let sw = 0, mx = 0, my = 0;
+        for (const t of cl) { mx += t.len * (t.x0 + t.x1) / 2; my += t.len * (t.y0 + t.y1) / 2; sw += t.len; }
+        mx /= sw; my /= sw;
+        let sxx = 0, syy = 0, sxy = 0;
+        for (const t of cl) for (const e of [[t.x0, t.y0], [t.x1, t.y1]]) { const dx = e[0] - mx, dy = e[1] - my; sxx += t.len * dx * dx; syy += t.len * dy * dy; sxy += t.len * dx * dy; }
+        const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+        let dx = Math.cos(ang), dy = Math.sin(ang);
+        if (dx * ux + dy * uy < 0) { dx = -dx; dy = -dy; }
+        let mn = Infinity, mxp = -Infinity;
+        for (const t of cl) for (const e of [[t.x0, t.y0], [t.x1, t.y1]]) { const a = (e[0] - mx) * dx + (e[1] - my) * dy; if (a < mn) mn = a; if (a > mxp) mxp = a; }
+        out.push({ x0: mx + dx * mn, y0: my + dy * mn, x1: mx + dx * mxp, y1: my + dy * mxp });
+      }
+      return out;
+    }
+
+    /* Porta a esattamente orizzontali/verticali le linee che lo sono quasi */
+    function straighten(L, deg) {
+      for (const s of L) {
+        const dx = s.x1 - s.x0, dy = s.y1 - s.y0;
+        if (Math.hypot(dx, dy) < 1e-6) continue;
+        const a = ((Math.atan2(dy, dx) * 180 / Math.PI) % 180 + 180) % 180;
+        if (a < deg || a > 180 - deg) { const y = (s.y0 + s.y1) / 2; s.y0 = s.y1 = y; }
+        else if (Math.abs(a - 90) < deg) { const x = (s.x0 + s.x1) / 2; s.x0 = s.x1 = x; }
+      }
+    }
+
+    function intersect(a, b) {
+      const dxa = a.x1 - a.x0, dya = a.y1 - a.y0, dxb = b.x1 - b.x0, dyb = b.y1 - b.y0;
+      const la = Math.hypot(dxa, dya), lb = Math.hypot(dxb, dyb);
+      if (la < 1e-9 || lb < 1e-9) return null;
+      const den = dxa * dyb - dya * dxb;
+      if (Math.abs(den) < 0.2 * la * lb) return null;
+      const t = ((b.x0 - a.x0) * dyb - (b.y0 - a.y0) * dxb) / den;
+      return [a.x0 + t * dxa, a.y0 + t * dya];
+    }
+
+    /* Salda gli estremi vicini in un unico vertice (angolo = intersezione delle due rette) */
+    function weld(L, A, snap) {
+      const E = [];
+      L.forEach((s, i) => { E.push({ t: 0, i, x: s.x0, y: s.y0 }); E.push({ t: 0, i, x: s.x1, y: s.y1 }); });
+      A.forEach((s, i) => { E.push({ t: 1, i, x: s.x0, y: s.y0 }); E.push({ t: 1, i, x: s.x1, y: s.y1 }); });
+      const par = E.map((_, i) => i);
+      const find = (x) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+      const cell = Math.max(1, snap), grid = new Map();
+      E.forEach((p, k) => {
+        const cx = Math.floor(p.x / cell), cy = Math.floor(p.y / cell);
+        for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+          const arr = grid.get((cx + ox) * 100003 + (cy + oy)); if (!arr) continue;
+          for (const j of arr) if (Math.hypot(E[j].x - p.x, E[j].y - p.y) <= snap) par[find(k)] = find(j);
+        }
+        const key = cx * 100003 + cy;
+        (grid.get(key) || grid.set(key, []).get(key)).push(k);
+      });
+      const groups = new Map();
+      E.forEach((p, k) => { const r = find(k); (groups.get(r) || groups.set(r, []).get(r)).push(k); });
+      const V = [], vid = new Int32Array(E.length);
+      for (const ks of groups.values()) {
+        let x = 0, y = 0;
+        for (const k of ks) { x += E[k].x; y += E[k].y; }
+        x /= ks.length; y /= ks.length;
+        if (ks.length === 2) {
+          const a = E[ks[0]], b = E[ks[1]];
+          if (a.t === 0 && b.t === 0 && a.i !== b.i) {
+            const p = intersect(L[a.i], L[b.i]);
+            if (p && Math.hypot(p[0] - x, p[1] - y) <= 2 * snap) { x = p[0]; y = p[1]; }
+          }
+        }
+        const id = V.length; V.push([x, y]);
+        for (const k of ks) vid[k] = id;
+      }
+      const segs = [], off = 2 * L.length;
+      L.forEach((s, i) => { const a = vid[2 * i], b = vid[2 * i + 1]; if (a !== b) segs.push({ a, b, m: null }); });
+      A.forEach((s, i) => { const a = vid[off + 2 * i], b = vid[off + 2 * i + 1]; if (a !== b) segs.push({ a, b, m: [s.mx, s.my] }); });
+      return { V, segs };
+    }
+
+    /* Estremi liberi vicini a una linea: appoggiati sulla linea (giunzioni a T) */
+    function tSnap(V, segs, snap) {
+      const deg = new Int32Array(V.length);
+      for (const s of segs) { deg[s.a]++; deg[s.b]++; }
+      const lines = segs.filter((s) => !s.m);
+      for (let v = 0; v < V.length; v++) {
+        if (deg[v] !== 1) continue;
+        const px = V[v][0], py = V[v][1];
+        let best = snap, bx = 0, by = 0, found = false;
+        for (const s of lines) {
+          if (s.a === v || s.b === v) continue;
+          const ax = V[s.a][0], ay = V[s.a][1], cx = V[s.b][0], cy = V[s.b][1];
+          if (px < Math.min(ax, cx) - snap || px > Math.max(ax, cx) + snap || py < Math.min(ay, cy) - snap || py > Math.max(ay, cy) + snap) continue;
+          const dx = cx - ax, dy = cy - ay, l2 = dx * dx + dy * dy;
+          if (l2 < 1e-9) continue;
+          const t = ((px - ax) * dx + (py - ay) * dy) / l2;
+          if (t <= 0.02 || t >= 0.98) continue;
+          const qx = ax + t * dx, qy = ay + t * dy, d = Math.hypot(px - qx, py - qy);
+          if (d < best) { best = d; bx = qx; by = qy; found = true; }
+        }
+        if (found) { V[v][0] = bx; V[v][1] = by; }
+      }
+    }
+
+    function bulgeOf(P, Q, M) {
+      if (!M) return 0;
+      const dx = Q[0] - P[0], dy = Q[1] - P[1], c = Math.hypot(dx, dy);
+      if (c < 1e-6) return 0;
+      const s = (M[0] - P[0]) * (-dy / c) + (M[1] - P[1]) * (dx / c);
+      const b = 2 * s / c;
+      if (Math.abs(b) < 0.01) return 0;
+      return Math.max(-12, Math.min(12, b));
+    }
+
+    /* Concatena i segmenti collegati in polilinee (con archi come "bulge", come in AutoCAD) */
+    function buildPaths(V, segs) {
+      const adj = V.map(() => []);
+      segs.forEach((s, i) => { adj[s.a].push(i); adj[s.b].push(i); });
+      const used = new Uint8Array(segs.length), paths = [];
+      const walk = (start, first) => {
+        const vs = [start], bs = []; let cur = start, si = first, closed = false;
+        for (;;) {
+          used[si] = 1;
+          const s = segs[si], nxt = s.a === cur ? s.b : s.a;
+          bs.push(bulgeOf(V[cur], V[nxt], s.m));
+          cur = nxt;
+          if (cur === start) { closed = true; break; }
+          vs.push(cur);
+          if (adj[cur].length !== 2) break;
+          const o = adj[cur][0] === si ? adj[cur][1] : adj[cur][0];
+          if (used[o]) break;
+          si = o;
+        }
+        paths.push({ vs, bs, closed });
+      };
+      for (let v = 0; v < V.length; v++) {
+        if (adj[v].length === 2) continue;
+        for (const si of adj[v]) if (!used[si]) walk(v, si);
+      }
+      for (let i = 0; i < segs.length; i++) if (!used[i]) walk(segs[i].a, i);
+      return paths;
+    }
+
+    function pathLength(v, b, closed) {
+      const n = v.length / 2, m = closed ? n : n - 1; let L = 0;
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, c = Math.hypot(v[2 * j] - v[2 * i], v[2 * j + 1] - v[2 * i + 1]);
+        if (!b[i]) L += c; else { const th = 4 * Math.atan(Math.abs(b[i])); L += c / (2 * Math.sin(th / 2)) * th; }
+      }
+      return L;
+    }
+
+        /* ====== Architettura: analisi a più scale con gerarchia dei livelli ====== */
+    function gradients(g, W, H) {
+      const N = W * H, mag = new Float32Array(N), dq = new Uint8Array(N);
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = y * W + x;
+          const gx = (g[i - W + 1] + 2 * g[i + 1] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - 1] + g[i + W - 1]);
+          const gy = (g[i + W - 1] + 2 * g[i + W] + g[i + W + 1]) - (g[i - W - 1] + 2 * g[i - W] + g[i - W + 1]);
+          mag[i] = Math.sqrt(gx * gx + gy * gy);
+          const ax = gx < 0 ? -gx : gx, ay = gy < 0 ? -gy : gy;
+          dq[i] = ay <= 0.41421356 * ax ? 0 : ay >= 2.41421356 * ax ? 2 : (gx * gy > 0 ? 1 : 3);
+        }
+      }
+      return { mag, dq };
+    }
+    function nmsMap(mag, dq, W, H) {
+      const out = new Float32Array(W * H);
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = y * W + x, m = mag[i];
+          if (m <= 0) continue;
+          let a, b;
+          switch (dq[i]) {
+            case 0: a = mag[i - 1]; b = mag[i + 1]; break;
+            case 1: a = mag[i - W - 1]; b = mag[i + W + 1]; break;
+            case 2: a = mag[i - W]; b = mag[i + W]; break;
+            default: a = mag[i - W + 1]; b = mag[i + W - 1];
+          }
+          if (m >= a && m >= b) out[i] = m;
+        }
+      }
+      return out;
+    }
+    function hystMap(nm, W, H, hi, lo) {
+      const N = W * H, out = new Uint8Array(N), stack = [], nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+      for (let i = 0; i < N; i++) if (nm[i] >= hi) { out[i] = 1; stack.push(i); }
+      while (stack.length) {
+        const c = stack.pop();
+        for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (j >= 0 && j < N && !out[j] && nm[j] >= lo) { out[j] = 1; stack.push(j); } }
+      }
+      return out;
+    }
+    function dilate(E, W, H, r) {
+      const N = W * H, tmp = new Uint8Array(N), out = new Uint8Array(N);
+      for (let y = 0; y < H; y++) {
+        const row = y * W; let cnt = 0;
+        for (let x = 0; x <= r && x < W; x++) cnt += E[row + x];
+        for (let x = 0; x < W; x++) {
+          tmp[row + x] = cnt > 0 ? 1 : 0;
+          const a = x + r + 1, b = x - r;
+          if (a < W) cnt += E[row + a];
+          if (b >= 0) cnt -= E[row + b];
+        }
+      }
+      for (let x = 0; x < W; x++) {
+        let cnt = 0;
+        for (let y = 0; y <= r && y < H; y++) cnt += tmp[y * W + x];
+        for (let y = 0; y < H; y++) {
+          out[y * W + x] = cnt > 0 ? 1 : 0;
+          const a = y + r + 1, b = y - r;
+          if (a < H) cnt += tmp[a * W + x];
+          if (b >= 0) cnt -= tmp[b * W + x];
+        }
+      }
+      return out;
+    }
+    function boxBlurGrid(a, w, h, r, passes) {
+      let src = Float32Array.from(a), dst = new Float32Array(a.length);
+      for (let p = 0; p < passes; p++) {
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          let s = 0, c = 0;
+          for (let k = -r; k <= r; k++) { const xx = x + k; if (xx >= 0 && xx < w) { s += src[y * w + xx]; c++; } }
+          dst[y * w + x] = s / c;
+        }
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          let s = 0, c = 0;
+          for (let k = -r; k <= r; k++) { const yy = y + k; if (yy >= 0 && yy < h) { s += dst[yy * w + x]; c++; } }
+          src[y * w + x] = s / c;
+        }
+      }
+      return src;
+    }
+    /* Individua l'edificio: dove ci sono tanti bordi orizzontali/verticali (cielo, ghiaia e fogliame non ne hanno) */
+    function subjectMask(mag, dq, W, H) {
+      const N = W * H;
+      let mx = 0; for (let i = 0; i < N; i++) if (mag[i] > mx) mx = mag[i];
+      if (mx <= 0) return null;
+      const bins = new Uint32Array(1001);
+      for (let i = 0; i < N; i++) bins[Math.min(1000, (mag[i] / mx * 1000) | 0)]++;
+      let acc = 0, T0 = 0;
+      for (let b = 0; b <= 1000; b++) { acc += bins[b]; if (acc >= N * 0.92) { T0 = (b + 1) / 1000 * mx; break; } }
+      const cs = 8, gw = Math.ceil(W / cs), gh = Math.ceil(H / cs);
+      let D = new Float32Array(gw * gh);
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x; if (mag[i] < T0) continue;
+        D[(y >> 3) * gw + (x >> 3)] += (dq[i] === 0 || dq[i] === 2) ? 1 : -1;
+      }
+      D = boxBlurGrid(D, gw, gh, 2, 3);
+      let dm = 0; for (let i = 0; i < D.length; i++) if (D[i] > dm) dm = D[i];
+      if (dm <= 0) return null;
+      const on = new Uint8Array(gw * gh);
+      for (let i = 0; i < on.length; i++) on[i] = D[i] > 0.22 * dm ? 1 : 0;
+      // componente più grande
+      const lab = new Int32Array(gw * gh).fill(-1); let best = -1, bestN = 0, nl = 0;
+      for (let s = 0; s < on.length; s++) {
+        if (!on[s] || lab[s] >= 0) continue;
+        const st = [s]; lab[s] = nl; let cnt = 0;
+        while (st.length) {
+          const c = st.pop(); cnt++;
+          const cx = c % gw, cy = (c / gw) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+            const j = ny * gw + nx; if (on[j] && lab[j] < 0) { lab[j] = nl; st.push(j); }
+          }
+        }
+        if (cnt > bestN) { bestN = cnt; best = nl; } nl++;
+      }
+      if (best < 0 || bestN < 12) return null;
+      const m = new Uint8Array(gw * gh);
+      for (let i = 0; i < m.length; i++) m[i] = lab[i] === best ? 1 : 0;
+      // riempie i buchi (aperture scure)
+      const out = new Uint8Array(gw * gh), st = [];
+      for (let x = 0; x < gw; x++) for (const y of [0, gh - 1]) { const j = y * gw + x; if (!m[j] && !out[j]) { out[j] = 2; st.push(j); } }
+      for (let y = 0; y < gh; y++) for (const x of [0, gw - 1]) { const j = y * gw + x; if (!m[j] && !out[j]) { out[j] = 2; st.push(j); } }
+      while (st.length) {
+        const c = st.pop(), cx = c % gw, cy = (c / gw) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+          const j = ny * gw + nx; if (!m[j] && !out[j]) { out[j] = 2; st.push(j); }
+        }
+      }
+      const filled = new Uint8Array(gw * gh);
+      for (let i = 0; i < filled.length; i++) filled[i] = out[i] === 2 ? 0 : 1;
+      // dilata di una cella
+      const fin = new Uint8Array(gw * gh);
+      let x0 = gw, x1 = 0;
+      for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+        let v = 0;
+        for (let dy = -1; dy <= 1 && !v; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && filled[ny * gw + nx]) { v = 1; break; }
+        }
+        fin[y * gw + x] = v; if (v) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+      }
+      return { on: fin, gw, gh, width: Math.max(1, (x1 - x0 + 1) * cs) };
+    }
+
+    function distPtSeg(px, py, s) {
+      const dx = s.x1 - s.x0, dy = s.y1 - s.y0, l2 = dx * dx + dy * dy;
+      if (l2 < 1e-9) return Math.hypot(px - s.x0, py - s.y0);
+      let t = ((px - s.x0) * dx + (py - s.y0) * dy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      return Math.hypot(px - (s.x0 + t * dx), py - (s.y0 + t * dy));
+    }
+    /* Toglie da `low` le linee già coperte da una linea di un livello superiore */
+    function dropCovered(low, high, tol) {
+      if (!high.length) return low;
+      return low.filter((s) => {
+        const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0); if (len < 1e-6) return false;
+        const ux = (s.x1 - s.x0) / len, uy = (s.y1 - s.y0) / len;
+        let covered = 0; const samples = 5;
+        for (let k = 0; k < samples; k++) {
+          const t = (k + 0.5) / samples, px = s.x0 + (s.x1 - s.x0) * t, py = s.y0 + (s.y1 - s.y0) * t;
+          for (const h of high) {
+            const hl = Math.hypot(h.x1 - h.x0, h.y1 - h.y0); if (hl < 1e-6) continue;
+            if (Math.abs(ux * (h.x1 - h.x0) / hl + uy * (h.y1 - h.y0) / hl) < 0.97) continue;
+            if (distPtSeg(px, py, h) <= tol) { covered++; break; }
+          }
+        }
+        return covered < samples * 0.7;
+      });
+    }
+
+    /* Sposta in `into` i gruppi di pixel di E più piccoli di minSize (non li butta: scendono di livello) */
+    function demoteSmall(E, into, W, H, minSize) {
+      const N = W * H, seen = new Uint8Array(N), nb = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
+      for (let s0 = 0; s0 < N; s0++) {
+        if (!E[s0] || seen[s0]) continue;
+        const comp = [s0]; seen[s0] = 1;
+        for (let h = 0; h < comp.length; h++) {
+          const c = comp[h];
+          for (let k = 0; k < 8; k++) { const j = c + nb[k]; if (j >= 0 && j < N && E[j] && !seen[j]) { seen[j] = 1; comp.push(j); } }
+        }
+        if (comp.length < minSize) for (const c of comp) { E[c] = 0; if (into) into[c] = 1; }
+      }
+    }
+    function morph1D(A, W, H, r, horiz, erode) {
+      const out = new Uint8Array(W * H), len = horiz ? W : H, lines = horiz ? H : W, stride = horiz ? 1 : W, step = horiz ? W : 1, win = 2 * r + 1;
+      for (let l = 0; l < lines; l++) {
+        const base = l * step; let cnt = 0;
+        for (let i = 0; i <= r && i < len; i++) cnt += A[base + i * stride];
+        for (let i = 0; i < len; i++) {
+          out[base + i * stride] = erode ? (cnt === win ? 1 : 0) : (cnt > 0 ? 1 : 0);
+          const a = i + r + 1, b = i - r;
+          if (a < len) cnt += A[base + a * stride];
+          if (b >= 0) cnt -= A[base + b * stride];
+        }
+      }
+      return out;
+    }
+    /* Tiene i pixel che fanno parte di corse lunghe (>= 2r+1) quasi orizzontali o verticali, tollerando ondulazioni di tp pixel */
+    function openAxis(E, W, H, r, tp, horiz) {
+      const t = morph1D(E, W, H, tp, !horiz, false);
+      const o = morph1D(morph1D(t, W, H, r, horiz, true), W, H, r, horiz, false);
+      const out = new Uint8Array(W * H);
+      for (let i = 0; i < out.length; i++) out[i] = E[i] && o[i] ? 1 : 0;
+      return out;
+    }
+    /* Allunga gli estremi liberi lungo la loro direzione fino a incontrare una linea trasversale vicina */
+    function extendToMeet(L, targets, maxExt) {
+      const all = L.concat(targets);
+      for (const s of L) {
+        const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0); if (len < 1e-6) continue;
+        const ux = (s.x1 - s.x0) / len, uy = (s.y1 - s.y0) / len;
+        for (let e = 0; e < 2; e++) {
+          const px = e ? s.x1 : s.x0, py = e ? s.y1 : s.y0, dx = e ? ux : -ux, dy = e ? uy : -uy;
+          let best = maxExt + 1, bx = 0, by = 0, hit = false, covered = false;
+          for (const t of all) {
+            if (t === s) continue;
+            const tl = Math.hypot(t.x1 - t.x0, t.y1 - t.y0); if (tl < 1e-6) continue;
+            const tx = (t.x1 - t.x0) / tl, ty = (t.y1 - t.y0) / tl;
+            if (Math.abs(dx * tx + dy * ty) > 0.7) continue;
+            if (distPtSeg(px, py, t) < 1.5) { covered = true; break; }
+            const den = dx * ty - dy * tx; if (Math.abs(den) < 1e-6) continue;
+            const a = ((t.x0 - px) * ty - (t.y0 - py) * tx) / den;
+            const b = ((t.x0 - px) * dy - (t.y0 - py) * dx) / den;
+            if (a < 0 || a > maxExt || b < -2 || b > tl + 2) continue;
+            if (a < best) { best = a; bx = px + dx * a; by = py + dy * a; hit = true; }
+          }
+          if (!covered && hit) { if (e) { s.x1 = bx; s.y1 = by; } else { s.x0 = bx; s.y0 = by; } }
+        }
+      }
+    }
+    const isAxis = (s) => Math.abs(s.x1 - s.x0) < 1e-6 || Math.abs(s.y1 - s.y0) < 1e-6;
+
+    function pctSorted(sorted, p) { return sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(p * sorted.length)))] : 0; }
+
+    function runArch(P) {
+      const W = IMG.W, H = IMG.H, gray = IMG.gray, sc = Math.max(0.6, W / 1400);
+      const t0 = Date.now(), lap = (n) => { if (P.debug) console.log('  ', n, Date.now() - t0, 'ms'); };
+      const sigF = P.autoAll ? 1.0 * sc : Math.max(0.6, P.blur * 0.6) * sc;
+      const key = 'A|' + W + 'x' + H + '|' + sigF.toFixed(2);
+      if (PRE.key !== key) {
+        const gF = gaussBlur(diffuse(gray, W, H, 2), W, H, sigF);
+        const gM = gaussBlur(diffuse(gray, W, H, 5), W, H, 2.2 * sc);
+        const gC = gaussBlur(diffuse(gray, W, H, 10), W, H, 4.5 * sc);
+        lap('blur+diffuse');
+        const F = gradients(gF, W, H), M = gradients(gM, W, H), C = gradients(gC, W, H);
+        const mask = subjectMask(F.mag, F.dq, W, H);
+        const full = new Uint8Array(W * H);
+        if (mask) { for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) full[y * W + x] = mask.on[(y >> 3) * mask.gw + (x >> 3)]; }
+        else full.fill(1);
+        lap('gradients+mask');
+        const nm = [nmsMap(F.mag, F.dq, W, H), nmsMap(M.mag, M.dq, W, H), nmsMap(C.mag, C.dq, W, H)];
+        const sorted = nm.map((a) => { const v = []; for (let i = 0; i < a.length; i++) if (a[i] > 0 && full[i]) v.push(a[i]); return Float32Array.from(v).sort(); });
+        PRE = { key, magF: F.mag, nm, sorted, full, Sw: mask ? mask.width : W, masked: !!mask };
+      }
+      lap('precompute');
+      const { magF, nm, sorted, full, Sw } = PRE;
+      /* colonne occupate dal soggetto: serve a scartare strisce di terreno fuori dalla facciata */
+      let cx0 = 0, cx1 = W - 1;
+      if (PRE.masked) {
+        const cc = new Int32Array(W); let mx = 0;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (full[y * W + x]) cc[x]++;
+        for (let x = 0; x < W; x++) if (cc[x] > mx) mx = cc[x];
+        while (cx0 < W - 1 && cc[cx0] < 0.25 * mx) cx0++;
+        while (cx1 > 0 && cc[cx1] < 0.25 * mx) cx1--;
+        const mg = Math.round(0.015 * W); cx0 = Math.max(0, cx0 - mg); cx1 = Math.min(W - 1, cx1 + mg);
+      }
+      const s = P.autoAll ? 50 : P.sens, shift = (50 - s) / 100 * 0.5;
+      const pc = (base) => Math.min(0.98, Math.max(0.02, base + shift));
+      const th = [[0.62, 0.35], [0.80, 0.55], [0.84, 0.5]].map(([h, l], k) => [pctSorted(sorted[k], pc(h)), pctSorted(sorted[k], pc(l))]);
+      const hy = nm.map((a, k) => { const e = hystMap(a, W, H, th[k][0], th[k][1]); for (let i = 0; i < e.length; i++) if (!full[i]) e[i] = 0; return e; });
+      const dC = dilate(hy[2], W, H, Math.round(5 * sc)), dM = dilate(hy[1], W, H, Math.round(3 * sc));
+      lap('hysteresis');
+      const maps = [new Uint8Array(W * H), new Uint8Array(W * H), new Uint8Array(W * H)];
+      for (let i = 0; i < W * H; i++) if (hy[0][i]) maps[dC[i] ? 0 : dM[i] ? 1 : 2][i] = 1;
+
+      const mm = P.autoAll ? 1 : Math.max(0.4, P.minlen / 30), tm = P.autoAll ? 1 : Math.max(0.4, P.simp / 1.5);
+      const minLen = [Math.max(40, 0.11 * Sw) * mm, Math.max(18, 0.04 * Sw) * mm, Math.max(14, 0.028 * Sw) * mm];
+      const tol = [1.4 * sc * tm, 1.2 * sc * tm, 1.4 * sc * tm];
+      const mrg = P.autoAll ? [2.5 * sc, 2.0 * sc, 3.0 * sc] : [P.merge, P.merge * 0.8, P.merge * 1.1];
+      const arcsOn = [P.arcs, P.arcs, false];
+
+      // livello 0 = struttura (bordi forti anche a scala grossa); il resto si divide in conci (giunti ortogonali) ed elementi (curve)
+      demoteSmall(maps[0], maps[1], W, H, minLen[0]);
+      const N = W * H, rest = new Uint8Array(N);
+      for (let i = 0; i < N; i++) rest[i] = (maps[1][i] | maps[2][i]) ? 1 : 0;
+      const rr = Math.max(6, Math.round(minLen[2] / 2)), tp = Math.max(1, Math.round(2 * sc));
+      const Hn = openAxis(rest, W, H, rr, tp, true), Vn = openAxis(rest, W, H, rr, tp, false);
+      const both = new Uint8Array(N);
+      for (let i = 0; i < N; i++) both[i] = (Hn[i] | Vn[i]) ? 1 : 0;
+      const nearBoth = dilate(both, W, H, 1), elem = new Uint8Array(N);
+      for (let i = 0; i < N; i++) elem[i] = rest[i] && !nearBoth[i] ? 1 : 0;
+      dropSmall(elem, W, H, Math.max(6, Math.round(minLen[1] * 0.5)));
+      const sets = [[], [], []];
+      for (const c of traceChains(maps[0], W, H, 4)) { c.str = chainStrength(c.pts, magF, W); sets[0].push(c); }
+      for (const c of traceChains(elem, W, H, 4)) { c.str = chainStrength(c.pts, magF, W); sets[1].push(c); }
+      for (const m of [Hn, Vn]) for (const c of traceChains(m, W, H, 4)) { c.str = chainStrength(c.pts, magF, W); sets[2].push(c); }
+      lap('tracing');
+      const Ls = [], As = [];
+      let rawPts = 0;
+      for (let l = 0; l < 3; l++) {
+        let chains = bridge(sets[l], Math.min(14, 3 + 2 * mrg[l]));
+        chains = chains.filter((c) => c.pts.length >= minLen[l] * (c.closed ? 0.6 : 1));
+        const L = [], A = [];
+        for (const c of chains) {
+          rawPts += c.pts.length;
+          const fit = fitChain(smoothPts(c.pts, c.closed, 2), c.closed, tol[l], arcsOn[l]);
+          if (l === 1) {
+            let al = 0, tl = 0;
+            for (const sg of fit) { const d = Math.hypot(sg.x1 - sg.x0, sg.y1 - sg.y0); tl += d; if (sg.arc) al += d; }
+            if (!(tl > 0 && (al / tl >= 0.5 || (c.closed && tl >= minLen[1])))) continue;
+          }
+          for (const sg of fit) (sg.arc ? A : L).push(sg);
+        }
+        let L2 = mrg[l] > 0 ? mergeLines(L, mrg[l], 3 * mrg[l] + 2) : L;
+        if (P.straight) {
+          straighten(L2, l === 2 ? 5 : 3);
+          if (l === 2) L2 = L2.filter(isAxis);
+          else if (l === 1) L2 = L2.filter((sg) => isAxis(sg) || Math.hypot(sg.x1 - sg.x0, sg.y1 - sg.y0) >= 2.5 * minLen[1]);
+        }
+        Ls.push(L2); As.push(A);
+      }
+      // gerarchia per lunghezza: le linee lunghe e gli archi grandi diventano struttura
+      const promote = Math.max(90, 0.16 * Sw) * mm, promoteArc = Math.max(60, 0.08 * Sw) * mm;
+      for (const l of [1, 2]) {
+        const keep = [];
+        for (const sg of Ls[l]) (Math.hypot(sg.x1 - sg.x0, sg.y1 - sg.y0) >= promote ? Ls[0] : keep).push(sg);
+        Ls[l] = keep;
+      }
+      {
+        const keep = [];
+        for (const sg of As[1]) (Math.hypot(sg.x1 - sg.x0, sg.y1 - sg.y0) >= promoteArc ? As[0] : keep).push(sg);
+        As[1] = keep;
+      }
+      lap('fit+merge');
+      Ls[1] = dropCovered(Ls[1], Ls[0], 3);
+      Ls[2] = dropCovered(Ls[2], Ls[0].concat(Ls[1]), 3.5);
+      if (P.straight) {
+        const ext = Math.round(14 * sc);
+        extendToMeet(Ls[0], [], ext);
+        extendToMeet(Ls[1], Ls[0], ext);
+        extendToMeet(Ls[2], Ls[0].concat(Ls[1]), ext);
+      }
+
+      const paths = []; let lines = 0, arcs = 0; const layers = [0, 0, 0];
+      for (let l = 0; l < 3; l++) {
+        const snap = 1 + 1.2 * mrg[l];
+        const { V, segs: s0 } = weld(Ls[l], As[l], snap);
+        tSnap(V, s0, snap);
+        const seen = new Set(), segs = [];
+        for (const sg of s0) {
+          if (!sg.m) { const k = Math.min(sg.a, sg.b) + '_' + Math.max(sg.a, sg.b); if (seen.has(k)) continue; seen.add(k); }
+          segs.push(sg);
+        }
+        for (const p of buildPaths(V, segs)) {
+          const v = []; for (const id of p.vs) v.push(V[id][0], V[id][1]);
+          if (pathLength(v, p.bs, p.closed) < Math.max(4, minLen[l] * 0.5)) continue;
+          if (l > 0) { let inside = 0; for (let k = 0; k < v.length; k += 2) if (v[k] >= cx0 && v[k] <= cx1) inside++; if (inside * 2 < v.length / 2) continue; }
+          for (const b of p.bs) { if (b) arcs++; else lines++; }
+          paths.push({ c: p.closed ? 1 : 0, v, b: p.bs, l }); layers[l]++;
+        }
+      }
+      lap('weld+paths');
+      return { paths, info: { T: null, lines, arcs, rawPts, layers, masked: PRE.masked } };
+    }
+
+    function runOld(P) {
+      const W = IMG.W, H = IMG.H, gray = IMG.gray, mode = P.mode, tol = Math.max(0.5, P.simp);
+      let chains = [], T = null;
+      if (mode === 'shape') {
+        const g = gaussBlur(gray, W, H, P.blur);
+        T = P.auto ? otsu(g) : P.thr;
+        for (const l of marching(g, W, H, T, P.inv)) if (l.length >= Math.max(4, P.minlen)) chains.push({ pts: l, closed: true, str: 1 });
+      } else {
+        const arch = mode === 'arch';
+        const iters = arch ? 8 : 2, sigma = Math.max(arch ? 1.2 : 0.6, P.blur);
+        const key = mode + '|' + iters + '|' + sigma;
+        if (PRE.key !== key) PRE = { key, g: gaussBlur(diffuse(gray, W, H, iters), W, H, sigma) };
+        const E = canny(PRE.g, W, H, P.sens);
+        if (E.mag) {
+          dropSmall(E, W, H, Math.max(4, Math.round(P.minlen * (arch ? 0.8 : 0.5))));
+          chains = traceChains(E, W, H, 4);
+          for (const c of chains) c.str = chainStrength(c.pts, E.mag, W);
+          chains = bridge(chains, Math.min(14, 3 + 2 * P.merge));
+          chains = chains.filter((c) => {
+            const n = c.pts.length;
+            if (n < Math.max(4, P.minlen)) return false;
+            if (arch && n < 4 * P.minlen && c.str < E.hi * 1.3) return false;
+            return true;
+          });
+        }
+      }
+      const rawPts = chains.reduce((s, c) => s + c.pts.length, 0);
+      const L = [], A = [];
+      for (const c of chains) {
+        const pts = smoothPts(c.pts, c.closed, mode === 'shape' ? 1 : 2);
+        for (const s of fitChain(pts, c.closed, tol, P.arcs)) (s.arc ? A : L).push(s);
+      }
+      const L2 = P.merge > 0 ? mergeLines(L, P.merge, 3 * P.merge + 2) : L;
+      if (P.straight) straighten(L2, 3);
+      const snap = 1 + 1.2 * P.merge;
+      const { V, segs: s0 } = weld(L2, A, snap);
+      tSnap(V, s0, snap);
+      const seen = new Set(), segs = [];
+      for (const s of s0) {
+        if (!s.m) { const k = Math.min(s.a, s.b) + '_' + Math.max(s.a, s.b); if (seen.has(k)) continue; seen.add(k); }
+        segs.push(s);
+      }
+      const paths = [];
+      let lines = 0, arcs = 0;
+      for (const p of buildPaths(V, segs)) {
+        const v = []; for (const id of p.vs) v.push(V[id][0], V[id][1]);
+        if (pathLength(v, p.bs, p.closed) < Math.max(2, P.minlen * 0.8)) continue;
+        for (const b of p.bs) { if (b) arcs++; else lines++; }
+        paths.push({ c: p.closed ? 1 : 0, v, b: p.bs, l: mode === 'shape' ? 0 : 1 });
+      }
+      return { paths, info: { T, lines, arcs, rawPts } };
+    }
+
+    function run(P) { return P.mode === 'ai' ? runAI(P) : P.mode === 'arch' ? runArch(P) : runOld(P); }
+    /* =====================================================================
+       Vettorizzazione AI: disegno neurale (mappa di linee) + forme segmentate
+       Ingresso P.ai = { rw, rh, neural: Float32Array (0 = linea, 1 = bianco),
+                         polys: [Float32Array x,y,...] (contorni dei segmenti),
+                         ox, oy, sx (regione -> coordinate immagine) }
+       Uscita: percorsi nei livelli 0 STRUTTURA, 1 ELEMENTI, 2 DETTAGLI, 3 RICOSTRUZIONI
+       ===================================================================== */
+    function nb8(b, i, W) { return b[i - W - 1] + b[i - W] + b[i - W + 1] + b[i - 1] + b[i + 1] + b[i + W - 1] + b[i + W] + b[i + W + 1]; }
+
+    function thinZS(b, W, H) {
+      for (let x = 0; x < W; x++) { b[x] = 0; b[(H - 1) * W + x] = 0; }
+      for (let y = 0; y < H; y++) { b[y * W] = 0; b[y * W + W - 1] = 0; }
+      let list = []; for (let i = 0; i < W * H; i++) if (b[i]) list.push(i);
+      const del = [];
+      for (let iter = 0; iter < 60; iter++) {
+        let changed = false;
+        for (let pass = 0; pass < 2; pass++) {
+          del.length = 0;
+          for (const i of list) {
+            if (!b[i]) continue;
+            const p2 = b[i - W], p3 = b[i - W + 1], p4 = b[i + 1], p5 = b[i + W + 1], p6 = b[i + W], p7 = b[i + W - 1], p8 = b[i - 1], p9 = b[i - W - 1];
+            const B = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+            if (B < 2 || B > 6) continue;
+            const A = (!p2 && p3) + (!p3 && p4) + (!p4 && p5) + (!p5 && p6) + (!p6 && p7) + (!p7 && p8) + (!p8 && p9) + (!p9 && p2);
+            if (A !== 1) continue;
+            if (pass === 0 ? (p2 && p4 && p6) || (p4 && p6 && p8) : (p2 && p4 && p8) || (p2 && p6 && p8)) continue;
+            del.push(i);
+          }
+          for (const i of del) b[i] = 0;
+          if (del.length) changed = true;
+        }
+        list = list.filter((i) => b[i]);
+        if (!changed) break;
+      }
+      return list;
+    }
+
+    function pruneSpurs(b, W, list, L) {
+      const removed = [];
+      let cur = list.slice();
+      for (let it = 0; it < L; it++) {
+        const ends = [];
+        for (const i of cur) if (b[i] && nb8(b, i, W) <= 1) ends.push(i);
+        if (!ends.length) break;
+        for (const i of ends) { b[i] = 0; removed.push(i); }
+        cur = cur.filter((i) => b[i]);
+      }
+      const orig = new Uint8Array(b.length); for (const i of removed) orig[i] = 1;
+      const N = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+      for (let it = 0; it < L; it++) {
+        const add = [];
+        for (const i of cur) {
+          if (!b[i] || nb8(b, i, W) !== 1) continue;
+          for (const d of N) if (orig[i + d] && !b[i + d]) add.push(i + d);
+        }
+        if (!add.length) break;
+        for (const j of add) { b[j] = 1; orig[j] = 0; cur.push(j); }
+      }
+      return cur.filter((i) => b[i]);
+    }
+
+    function dropSmallComp(b, W, list, minPx) {
+      const lab = new Int32Array(b.length), N = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+      let id = 0; const out = [];
+      for (const s of list) {
+        if (!b[s] || lab[s]) continue;
+        id++; const comp = [s]; lab[s] = id;
+        for (let k = 0; k < comp.length; k++) { const i = comp[k]; for (const d of N) { const j = i + d; if (b[j] && !lab[j]) { lab[j] = id; comp.push(j); } } }
+        if (comp.length < minPx) for (const i of comp) b[i] = 0; else for (const i of comp) out.push(i);
+      }
+      return out;
+    }
+
+    /* Catene di pixel tra nodi (estremi o incroci) del grafo dello scheletro */
+    function traceSkeleton(b, W, list) {
+      const N = [1, -1, W, -W, W + 1, W - 1, -W + 1, -W - 1];
+      const node = new Uint8Array(b.length), vis = new Uint8Array(b.length), chains = [];
+      for (const i of list) if (nb8(b, i, W) !== 2) node[i] = 1;
+      const xy = (i) => [i % W, (i / W) | 0];
+      for (const s of list) {
+        if (!node[s]) continue;
+        for (const d of N) {
+          let c = s + d;
+          if (!b[c] || (vis[c] && !node[c])) continue;
+          if (node[c]) { if (c > s) chains.push([xy(s), xy(c)]); continue; }
+          const ch = [xy(s), xy(c)]; let p = s;
+          while (!node[c]) {
+            vis[c] = 1; let nx = -1;
+            for (const e of N) { const q = c + e; if (q !== p && b[q] && (!vis[q] || node[q]) && q !== s) { nx = q; if (node[q]) break; } }
+            if (nx < 0) { const q = s; if (N.some((e) => c + e === q) && ch.length > 3) ch.push(xy(q)); break; }
+            p = c; c = nx; ch.push(xy(c));
+          }
+          chains.push(ch);
+        }
+      }
+      for (const s of list) {
+        if (!b[s] || node[s] || vis[s]) continue;
+        const ch = [xy(s)]; vis[s] = 1; let c = s;
+        for (;;) {
+          let nx = -1; for (const e of N) { const q = c + e; if (b[q] && !vis[q] && !node[q]) { nx = q; break; } }
+          if (nx < 0) break; vis[nx] = 1; c = nx; ch.push(xy(c));
+        }
+        if (ch.length > 8) { ch.push(ch[0]); chains.push(ch); }
+      }
+      return chains;
+    }
+
+    function polyArea(p) { let a = 0; for (let i = 0, n = p.length; i < n; i++) { const q = p[(i + 1) % n]; a += p[i][0] * q[1] - q[0] * p[i][1]; } return a / 2; }
+    function median(a) { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; }
+    function circleFit(pts) {
+      let n = pts.length, mx = 0, my = 0; for (const p of pts) { mx += p[0]; my += p[1]; } mx /= n; my /= n;
+      let suu = 0, svv = 0, suv = 0, suuu = 0, svvv = 0, suvv = 0, svuu = 0;
+      for (const p of pts) { const u = p[0] - mx, v = p[1] - my; suu += u * u; svv += v * v; suv += u * v; suuu += u * u * u; svvv += v * v * v; suvv += u * v * v; svuu += v * u * u; }
+      const det = suu * svv - suv * suv; if (Math.abs(det) < 1e-9) return null;
+      const r1 = 0.5 * (suuu + suvv), r2 = 0.5 * (svvv + svuu);
+      const uc = (r1 * svv - r2 * suv) / det, vc = (r2 * suu - r1 * suv) / det;
+      const cx = uc + mx, cy = vc + my, r = Math.sqrt(uc * uc + vc * vc + (suu + svv) / n);
+      let e = 0; for (const p of pts) e += Math.abs(Math.hypot(p[0] - cx, p[1] - cy) - r);
+      return { cx, cy, r, err: e / n };
+    }
+    const L_ = (x0, y0, x1, y1) => ({ arc: false, x0, y0, x1, y1 });
+    const A_ = (x0, y0, x1, y1, mx, my) => ({ arc: true, x0, y0, x1, y1, mx, my });
+    function segDist(px, py, s) {
+      if (!s.arc) return distPtSeg(px, py, s);
+      const c = circleFit([[s.x0, s.y0], [s.mx, s.my], [s.x1, s.y1], [(s.x0 + s.mx) / 2, (s.y0 + s.my) / 2]]);
+      return c ? Math.abs(Math.hypot(px - c.cx, py - c.cy) - c.r) : distPtSeg(px, py, s);
+    }
+    function shapeDev(pts, segs) {
+      const ds = [], step = Math.max(1, Math.floor(pts.length / 120));
+      for (let k = 0; k < pts.length; k += step) { let d = Infinity; for (const s of segs) d = Math.min(d, segDist(pts[k][0], pts[k][1], s)); ds.push(d); }
+      ds.sort((a, b) => a - b); return ds[Math.floor(ds.length * 0.9)] || 0;
+    }
+
+    /* Riconosce e regolarizza una forma segmentata: cerchio, rettangolo, apertura ad arco o poligono */
+    function regShape(pts, tol0) {
+      const n = pts.length; if (n < 8) return null;
+      // la risoluzione della maschera (passo tra i punti del contorno) allarga la tolleranza
+      const gaps = []; for (let i = 0; i < n; i += Math.max(1, n >> 6)) { const q = pts[(i + 1) % n]; gaps.push(Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])); }
+      const tol = Math.max(tol0, 0.8 * median(gaps));
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of pts) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+      const w = x1 - x0, h = y1 - y0, A = Math.abs(polyArea(pts)); if (w < 4 || h < 4) return null;
+      const fill = A / (w * h);
+      const out = (cls, segs) => ({ cls, segs, dev: shapeDev(pts, segs), w, h, A, tol });
+      const lim = Math.max(3 * tol, 0.05 * Math.min(w, h));
+      // cerchio
+      if (fill > 0.72 && fill < 0.84 && Math.abs(w - h) < 0.15 * Math.max(w, h)) {
+        const c = circleFit(pts);
+        let emax = 0; if (c) for (const p of pts) emax = Math.max(emax, Math.abs(Math.hypot(p[0] - c.cx, p[1] - c.cy) - c.r));
+        if (c && c.err < 0.035 * c.r + 0.4 && emax < 0.12 * c.r + 1.2) {
+          const { cx, cy, r } = c;
+          return out('cerchio', [A_(cx - r, cy, cx + r, cy, cx, cy - r), A_(cx + r, cy, cx - r, cy, cx, cy + r)]);
+        }
+      }
+      const cxm = (x0 + x1) / 2, cym = (y0 + y1) / 2;
+      const sideX = (left) => median(pts.filter((p) => (left ? p[0] < cxm : p[0] > cxm) && p[1] > y0 + 0.3 * h && p[1] < y1 - 0.15 * h).map((p) => p[0]));
+      const sideY = (top) => median(pts.filter((p) => (top ? p[1] < cym : p[1] > cym) && p[0] > x0 + 0.25 * w && p[0] < x1 - 0.25 * w).map((p) => p[1]));
+      const l = sideX(true), r = sideX(false), b = sideY(false), t = sideY(true);
+      // apertura ad arco (tutto sesto o ribassato)
+      const widthAt = (yy) => { let mn = Infinity, mx = -Infinity; for (let i = 0; i < n; i++) { const p = pts[i], q = pts[(i + 1) % n]; if ((p[1] <= yy && q[1] > yy) || (q[1] <= yy && p[1] > yy)) { const x = p[0] + (yy - p[1]) / (q[1] - p[1]) * (q[0] - p[0]); mn = Math.min(mn, x); mx = Math.max(mx, x); } } return mx - mn; };
+      const archy = widthAt(y0 + 0.12 * w) < 0.8 * w && widthAt(y0 + 0.04 * w) < 0.6 * w;
+      if (archy && fill > 0.62 && h > 0.6 * w && isFinite(l + r + b)) {
+        const top = pts.filter((p) => p[1] < y0 + 0.45 * w);
+        const c = top.length > 10 ? circleFit(top) : null;
+        const hw = (r - l) / 2;
+        if (c && c.err < 0.06 * c.r + 0.5 && c.r > 0.85 * hw && c.r < 2.5 * hw && Math.abs(c.cx - (l + r) / 2) < 0.12 * w) {
+          const ys = c.cy - Math.sqrt(Math.max(0, c.r * c.r - hw * hw));
+          const yt = c.cy - c.r, xm = (l + r) / 2;
+          if (ys < b - 4) {
+            const s = out('arco', [L_(l, b, r, b), L_(r, b, r, ys), A_(r, ys, l, ys, xm, yt), L_(l, ys, l, b)]);
+            if (s.dev <= lim) return s;
+          }
+        }
+      }
+      // rettangolo
+      if (fill > 0.84 && isFinite(l + r + t + b)) {
+        const s = out('rettangolo', [L_(l, t, r, t), L_(r, t, r, b), L_(r, b, l, b), L_(l, b, l, t)]);
+        if (s.dev <= lim) return s;
+      }
+      // poligono generico: linee e archi riconosciuti sul contorno
+      const round = fill < 0.8;
+      const segs = fitChain(smoothPts(pts, true, 2), true, 1.3 * tol, round);
+      if (segs.length < 3) return null;
+      straighten(segs.filter((s) => !s.arc), 8);
+      return { cls: 'poligono', segs, dev: 0, w, h, A, tol };
+    }
+
+    /* Percorso chiuso da una sequenza ordinata di segmenti (ogni segmento parte dove finisce il precedente) */
+    function loopPath(segs) {
+      const v = [], b = [];
+      for (const s of segs) { v.push(s.x0, s.y0); b.push(s.arc ? bulgeOf([s.x0, s.y0], [s.x1, s.y1], [s.mx, s.my]) : 0); }
+      return { c: 1, v, b };
+    }
+
+    /* Prolunga gli estremi liberi fino alla linea più vicina (giunzioni mancanti): i tratti aggiunti sono stimati */
+    function bridgeFree(Ls, targets, ext) {
+      const add = [];
+      const ends = [];
+      for (const s of Ls) { ends.push([s.x0, s.y0, s.x0 - s.x1, s.y0 - s.y1, s]); ends.push([s.x1, s.y1, s.x1 - s.x0, s.y1 - s.y0, s]); }
+      for (const [px, py, dx, dy, own] of ends) {
+        const len = Math.hypot(dx, dy); if (len < 6) continue;
+        const ux = dx / len, uy = dy / len;
+        let near = false;
+        for (const t of targets) { if (t === own) continue; if (Math.hypot(t.x0 - px, t.y0 - py) < 2.5 || Math.hypot(t.x1 - px, t.y1 - py) < 2.5 || segDist(px, py, t) < 1.5) { near = true; break; } }
+        if (near) continue;
+        let best = ext, hx = 0, hy = 0;
+        for (const t of targets) {
+          if (t === own || t.arc) continue;
+          const ex = t.x1 - t.x0, ey = t.y1 - t.y0, den = ux * ey - uy * ex;
+          if (Math.abs(den) < 0.3 * Math.hypot(ex, ey)) continue;
+          const qx = t.x0 - px, qy = t.y0 - py, s = (qx * ey - qy * ex) / den, u = (qx * uy - qy * ux) / den;
+          if (s > 0.5 && s < best && u >= -0.02 && u <= 1.02) { best = s; hx = px + ux * s; hy = py + uy * s; }
+        }
+        if (best < ext) add.push(L_(px, py, hx, hy));
+      }
+      return add;
+    }
+
+    function runAI(P) {
+      const t0 = Date.now(), AI = P.ai, W = AI.rw, H = AI.rh, k = Math.max(W, H) / 900;
+      const tol = 1.5 * k;
+      // --- forme segmentate
+      const shapes = [];
+      for (const f of AI.polys || []) {
+        const pts = []; for (let i = 0; i < f.length; i += 2) pts.push([f[i], f[i + 1]]);
+        const s = regShape(pts, tol); if (s) shapes.push(s);
+      }
+      const areas = shapes.map((s) => s.A), medA = median(areas) || 1, regionA = W * H;
+      const gray = AI.gray, lum = (s) => {
+        if (!gray) return 128; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const g of s.segs) { x0 = Math.min(x0, g.x0, g.x1); x1 = Math.max(x1, g.x0, g.x1); y0 = Math.min(y0, g.y0, g.y1); y1 = Math.max(y1, g.y0, g.y1); }
+        const ax = Math.round(x0 + 0.3 * (x1 - x0)), bx = Math.round(x1 - 0.3 * (x1 - x0)), ay = Math.round(y0 + 0.3 * (y1 - y0)), by = Math.round(y1 - 0.3 * (y1 - y0));
+        let t = 0, n = 0; for (let y = Math.max(0, ay); y <= Math.min(H - 1, by); y++) for (let x = Math.max(0, ax); x <= Math.min(W - 1, bx); x++) { t += gray[y * W + x]; n++; }
+        return n ? t / n : 128;
+      };
+      for (const s of shapes) s.lum = lum(s);
+      const medL = median(shapes.map((s) => s.lum)) || 128;
+      for (const s of shapes) {
+        const big = s.A >= 5 * medA || s.A >= 0.012 * regionA;
+        const opening = s.lum < 0.55 * medL && s.A >= 0.0015 * regionA;
+        s.layer = s.cls === 'arco' || s.cls === 'cerchio' || big || opening ? 1 : 2;
+        s.est = s.cls !== 'poligono' && s.dev > Math.max(2.2 * s.tol, 0.035 * Math.min(s.w, s.h));
+      }
+      const shapeSegs = []; for (const s of shapes) for (const g of s.segs) shapeSegs.push(g);
+      // --- disegno neurale -> scheletro -> catene
+      const nm = AI.neural, bin = new Uint8Array(W * H), th = P.aiThr || 0.5;
+      for (let i = 0; i < W * H; i++) bin[i] = nm[i] < th ? 1 : 0;
+      const dl = dilate(bin, W, H, 1), cl = new Uint8Array(W * H);
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; cl[i] = dl[i] && dl[i - 1] && dl[i + 1] && dl[i - W] && dl[i + W] && dl[i - W - 1] && dl[i - W + 1] && dl[i + W - 1] && dl[i + W + 1] ? 1 : bin[i]; }
+      // riempie le celle minuscole (grana della pietra, intonaco)
+      const cellMin = Math.round(200 * k * k), lab = new Int32Array(W * H); let id = 0;
+      for (let s = 0; s < W * H; s++) {
+        if (cl[s] || lab[s]) continue;
+        id++; const comp = [s]; lab[s] = id; let border = false;
+        for (let q = 0; q < comp.length && comp.length <= cellMin; q++) {
+          const i = comp[q], x = i % W, y = (i / W) | 0;
+          if (x === 0 || y === 0 || x === W - 1 || y === H - 1) border = true;
+          if (x > 0 && !cl[i - 1] && !lab[i - 1]) { lab[i - 1] = id; comp.push(i - 1); }
+          if (x < W - 1 && !cl[i + 1] && !lab[i + 1]) { lab[i + 1] = id; comp.push(i + 1); }
+          if (y > 0 && !cl[i - W] && !lab[i - W]) { lab[i - W] = id; comp.push(i - W); }
+          if (y < H - 1 && !cl[i + W] && !lab[i + W]) { lab[i + W] = id; comp.push(i + W); }
+        }
+        if (comp.length < cellMin && !border) for (const i of comp) cl[i] = 1;
+      }
+      let list = thinZS(cl, W, H);
+      list = pruneSpurs(cl, W, list, Math.round(12 * k));
+      list = thinZS(cl, W, H);
+      list = pruneSpurs(cl, W, list, Math.round(8 * k));
+      list = dropSmallComp(cl, W, list, Math.round(40 * k));
+      const chains = traceSkeleton(cl, W, list);
+      const longL = Math.max(80 * k, 0.16 * Math.min(W, H));
+      let NL = [], NA = [], raw = 0;
+      for (const ch of chains) {
+        raw += ch.length; if (ch.length < 5) continue;
+        const closed = ch.length > 8 && ch[0][0] === ch[ch.length - 1][0] && ch[0][1] === ch[ch.length - 1][1];
+        const pts = closed ? ch.slice(0, -1) : ch;
+        if (!closed && pts.length >= 0.4 * longL) {
+          const a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (L >= 0.4 * longL) { let dmax = 0; for (const q of pts) dmax = Math.max(dmax, Math.abs((b[1] - a[1]) * (q[0] - a[0]) - (b[0] - a[0]) * (q[1] - a[1])) / L); if (dmax <= 4 * k) { NL.push(L_(a[0], a[1], b[0], b[1])); continue; } }
+        }
+        for (const sg of fitChain(smoothPts(pts, closed, 1), closed, tol, true)) (sg.arc ? NA : NL).push(sg);
+      }
+      const inner = new Uint8Array(W * H);
+      for (const f of AI.polys || []) {
+        let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+        for (let i = 0; i < f.length; i += 2) { minx = Math.min(minx, f[i]); maxx = Math.max(maxx, f[i]); miny = Math.min(miny, f[i + 1]); maxy = Math.max(maxy, f[i + 1]); }
+        const n = f.length / 2;
+        for (let y = Math.max(0, Math.ceil(miny)); y <= Math.min(H - 1, Math.floor(maxy)); y++) {
+          const xs = [];
+          for (let i = 0; i < n; i++) { const j = (i + 1) % n, ya = f[2 * i + 1], yb = f[2 * j + 1]; if ((ya <= y && yb > y) || (yb <= y && ya > y)) xs.push(f[2 * i] + (y - ya) / (yb - ya) * (f[2 * j] - f[2 * i])); }
+          xs.sort((a, b) => a - b);
+          for (let q = 0; q + 1 < xs.length; q += 2) for (let x = Math.max(0, Math.ceil(xs[q])); x <= Math.min(W - 1, Math.floor(xs[q + 1])); x++) inner[y * W + x] = 1;
+        }
+      }
+      { const er = Math.max(2, Math.round(4 * k)); const inv = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) inv[i] = inner[i] ? 0 : 1; const d = dilate(inv, W, H, er); for (let i = 0; i < W * H; i++) inner[i] = d[i] ? 0 : 1; }
+      const inside = (s) => { let c = 0; for (let q = 0; q <= 4; q++) { const x = Math.round(s.x0 + (s.x1 - s.x0) * q / 4), y = Math.round(s.y0 + (s.y1 - s.y0) * q / 4); if (x >= 0 && y >= 0 && x < W && y < H && inner[y * W + x]) c++; } return c >= 3; };
+      NL = NL.filter((s) => !inside(s)); NA = NA.filter((s) => !inside(s));
+      // via i tratti già descritti dalle forme segmentate
+      const covered = (s) => { const m = 5; let hit = 0; for (let q = 0; q <= m; q++) { const x = s.x0 + (s.x1 - s.x0) * q / m, y = s.y0 + (s.y1 - s.y0) * q / m; for (const g of shapeSegs) if (segDist(x, y, g) < 6 * k) { hit++; break; } } return hit >= m; };
+      if (shapeSegs.length) { NL = NL.filter((s) => !covered(s)); NA = NA.filter((s) => !covered(s)); }
+      NL = mergeLines(NL, 2 * k, 6 * k).map((s) => ({ arc: false, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 }));
+      straighten(NL, 4);
+      { const ax = NL.filter(isAxis), ot = NL.filter((s) => !isAxis(s)); NL = mergeLines(ax, 2 * k, 18 * k).map((s) => ({ arc: false, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1 })).concat(ot); }
+      const minSeg = 7 * k;
+      NL = NL.filter((s) => Math.hypot(s.x1 - s.x0, s.y1 - s.y0) >= minSeg);
+      const Ls = [[], [], [], []], As = [[], [], [], []];
+      for (const s of NL) Ls[Math.hypot(s.x1 - s.x0, s.y1 - s.y0) >= longL ? 0 : 2].push(s);
+      for (const s of NA) { const c = Math.hypot(s.x1 - s.x0, s.y1 - s.y0); if (c >= 10 * k) As[c >= 40 * k ? 1 : 2].push(s); }
+      // giunzioni mancanti (stimate)
+      const tg = Ls[0].concat(Ls[2], shapeSegs.filter((g) => !g.arc));
+      Ls[3] = bridgeFree(Ls[0], tg, 12 * k);
+      // --- percorsi
+      const paths = []; let lines = 0, arcs = 0; const layers = [0, 0, 0, 0];
+      const push = (p, l) => { p.l = l; for (const b of p.b) { if (b) arcs++; else lines++; } paths.push(p); layers[l]++; };
+      for (const s of shapes) {
+        if (s.cls === 'poligono') {
+          const { V, segs } = weld(s.segs.filter((g) => !g.arc), s.segs.filter((g) => g.arc), 3 * k);
+          for (const p of buildPaths(V, segs)) { const v = []; for (const q of p.vs) v.push(V[q][0], V[q][1]); push({ c: p.closed ? 1 : 0, v, b: p.bs }, s.layer); }
+        } else push(loopPath(s.segs), s.est ? 3 : s.layer);
+      }
+      for (let l = 0; l < 4; l++) {
+        if (!Ls[l].length && !As[l].length) continue;
+        const snap = 2 * k, { V, segs: s0 } = weld(Ls[l], As[l], snap);
+        if (l !== 3) tSnap(V, s0, snap);
+        for (const p of buildPaths(V, s0)) {
+          const v = []; for (const q of p.vs) v.push(V[q][0], V[q][1]);
+          if (l !== 3 && pathLength(v, p.bs, p.closed) < (l === 2 && !p.closed ? 24 : 10) * k) continue;
+          push({ c: p.closed ? 1 : 0, v, b: p.bs }, l);
+        }
+      }
+      // regione -> coordinate immagine
+      const ox = AI.ox || 0, oy = AI.oy || 0, sx = AI.sx || 1;
+      for (const p of paths) for (let i = 0; i < p.v.length; i += 2) { p.v[i] = ox + p.v[i] * sx; p.v[i + 1] = oy + p.v[i + 1] * sx; }
+      const cls = {}; for (const s of shapes) cls[s.cls] = (cls[s.cls] || 0) + 1;
+      const dbg = P.debug ? shapes.filter((s) => s.cls === 'arco' || s.est).map((s) => [s.cls, +s.dev.toFixed(1), Math.round(s.w), Math.round(s.h), s.est ? 1 : 0]) : undefined;
+      return { paths, info: { T: null, lines, arcs, rawPts: raw, layers, shapes: shapes.length, cls, ms: Date.now() - t0, dbg } };
+    }
+
+    /* Riquadro dell'edificio proposto automaticamente: dove si concentrano i bordi lunghi orizzontali e verticali
+       (giunti, cornici, stipiti). Cielo, terreno in prospettiva e alberi ne hanno pochi. */
+    function detect() {
+      if (!IMG) return null;
+      const { W, H, gray } = IMG, g = gaussBlur(gray, W, H, 1.4), N = W * H;
+      const gx = new Float32Array(N), gy = new Float32Array(N), mag = new Float32Array(N);
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const a = g[i - W - 1], b = g[i - W], c = g[i - W + 1], d = g[i - 1], f = g[i + 1], u = g[i + W - 1], v = g[i + W], w = g[i + W + 1];
+        gx[i] = (c + 2 * f + w) - (a + 2 * d + u); gy[i] = (u + 2 * v + w) - (a + 2 * b + c); mag[i] = Math.hypot(gx[i], gy[i]);
+      }
+      const smp = []; for (let i = 0; i < N; i += 7) smp.push(mag[i]); smp.sort((p, q) => p - q);
+      const T = Math.max(8, smp[Math.floor(smp.length * 0.8)]);
+      const Vm = new Uint8Array(N), Hm = new Uint8Array(N);
+      for (let i = 0; i < N; i++) { if (mag[i] < T) continue; const ax = Math.abs(gx[i]), ay = Math.abs(gy[i]); if (ax > 2 * ay) Vm[i] = 1; else if (ay > 2 * ax) Hm[i] = 1; }
+      const L = Math.max(10, Math.round(Math.max(W, H) / 110)), cs = 16, gw = Math.ceil(W / cs), gh = Math.ceil(H / cs), score = new Float32Array(gw * gh);
+      for (let x = 0; x < W; x++) { let run = 0; for (let y = 0; y <= H; y++) { const on = y < H && Vm[y * W + x]; if (on) run++; else { if (run >= L) for (let q = y - run; q < y; q++) score[((q / cs) | 0) * gw + ((x / cs) | 0)]++; run = 0; } } }
+      for (let y = 0; y < H; y++) { let run = 0; for (let x = 0; x <= W; x++) { const on = x < W && Hm[y * W + x]; if (on) run++; else { if (run >= L) for (let q = x - run; q < x; q++) score[((y / cs) | 0) * gw + ((q / cs) | 0)]++; run = 0; } } }
+      const sm = boxBlurGrid(score, gw, gh, 1, 2);
+      let mx = 0; for (const v of sm) if (v > mx) mx = v; if (mx <= 0) return null;
+      const on = new Uint8Array(gw * gh); for (let i = 0; i < on.length; i++) on[i] = sm[i] > 0.28 * mx ? 1 : 0;
+      const lab = new Int32Array(gw * gh); let best = 0, bestS = 0, id = 0, bb = null;
+      for (let s = 0; s < on.length; s++) {
+        if (!on[s] || lab[s]) continue;
+        id++; const comp = [s]; lab[s] = id; let tot = 0, x0 = gw, y0 = gh, x1 = 0, y1 = 0;
+        for (let q = 0; q < comp.length; q++) {
+          const c = comp[q], cx = c % gw, cy = (c / gw) | 0; tot += sm[c];
+          x0 = Math.min(x0, cx); x1 = Math.max(x1, cx); y0 = Math.min(y0, cy); y1 = Math.max(y1, cy);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy; if (nx >= 0 && ny >= 0 && nx < gw && ny < gh) { const j = ny * gw + nx; if (on[j] && !lab[j]) { lab[j] = id; comp.push(j); } } }
+        }
+        if (tot > bestS) { bestS = tot; best = id; bb = [x0, y0, x1, y1]; }
+      }
+      if (!bb) return null;
+      // affina: profilo delle colonne e delle righe dentro il blocco trovato
+      const span = (prof) => {
+        let pk = 0; for (let i = 1; i < prof.length; i++) if (prof[i] > prof[pk]) pk = i;
+        const th = 0.3 * prof[pk]; let a = pk, b = pk;
+        while (a > 0 && prof[a - 1] > th) a--; while (b < prof.length - 1 && prof[b + 1] > th) b++;
+        return [a, b];
+      };
+      for (let it = 0; it < 2; it++) {
+        const col = new Float32Array(gw), row = new Float32Array(gh);
+        for (let y = bb[1]; y <= bb[3]; y++) for (let x = bb[0]; x <= bb[2]; x++) { col[x] += sm[y * gw + x]; row[y] += sm[y * gw + x]; }
+        const cx = span(col), cy = span(row);
+        bb = [Math.max(bb[0], cx[0]), Math.max(bb[1], cy[0]), Math.min(bb[2], cx[1]), Math.min(bb[3], cy[1])];
+      }
+      const m = Math.round(0.025 * Math.max(W, H));
+      return [Math.max(0, bb[0] * cs - m), Math.max(0, bb[1] * cs - m), Math.min(W, (bb[2] + 1) * cs + m), Math.min(H, (bb[3] + 1) * cs + m)];
+    }
+    return { setImage, run, detect };
+  }
+
+  /* =====================================================================
+     Motore AI (gira in un Web Worker; in mancanza, nel thread principale)
+     - Informative Drawings (contorni): disegno a linee per riquadri sovrapposti
+     - MobileSAM: segmentazione delle forme (passaggio largo + riquadri fini)
+     Messaggi in ingresso: {type:'run', id, rgba, W, H, detail, base}, {type:'cancel'}
+     Messaggi in uscita:   prog, neural, polys, done, error
+     ===================================================================== */
+  function makeAI(emit, getOrt) {
+    let cancelled = false, busy = false;
+    const sessions = {};
+    const MODELS = { id: 'contour_style_512x512.onnx', enc: 'mobilesam-encoder.onnx', dec: 'mobilesam-decoder.onnx' };
+    const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const pause = () => new Promise((r) => setTimeout(r, 0));
+    function check() { if (cancelled) throw new Error('__cancel__'); }
+
+    async function loadModel(base, key, label) {
+      const url = base + MODELS[key];
+      let cache = null;
+      try { cache = await caches.open('fotovettore-modelli-v1'); const hit = await cache.match(url); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch (e) { cache = null; }
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Impossibile scaricare il modello (' + r.status + ')');
+      const len = +r.headers.get('content-length') || 0;
+      const rd = r.body && r.body.getReader ? r.body.getReader() : null;
+      let buf;
+      if (rd) {
+        const parts = []; let got = 0;
+        for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length; if (len) emit({ type: 'prog', stage: 'download', frac: got / len, msg: 'Scarico ' + label + ' · ' + Math.round(got / 1048576) + ' / ' + Math.round(len / 1048576) + ' MB' }); check(); }
+        buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length; }
+      } else buf = new Uint8Array(await r.arrayBuffer());
+      try { if (cache) await cache.put(url, new Response(buf.slice(0), { headers: { 'Content-Type': 'application/octet-stream' } })); } catch (e) { /* spazio pieno: si riscarica la prossima volta */ }
+      return buf;
+    }
+    async function session(base, key, label) {
+      if (sessions[key]) return sessions[key];
+      const ort = getOrt();
+      const buf = await loadModel(base, key, label);
+      emit({ type: 'prog', stage: 'download', frac: 1, msg: 'Preparo ' + label + '…' });
+      try { sessions[key] = await ort.InferenceSession.create(buf, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' }); }
+      catch (e) { const err = new Error(String(e && e.message || e)); err.init = true; throw err; }
+      return sessions[key];
+    }
+    async function release(key) { const s = sessions[key]; delete sessions[key]; try { if (s && s.release) await s.release(); } catch (e) { /* già liberata */ } }
+
+    /* Campiona il quadrato [x, y, T] dell'immagine RGBA in un tensore D×D (bilineare). Fuori dai bordi: colore del bordo. */
+    function sampleTile(rgba, W, H, x, y, T, D, mean, std) {
+      const out = new Float32Array(3 * D * D), P = D * D, k = T / D;
+      for (let j = 0; j < D; j++) {
+        let sy = y + (j + 0.5) * k - 0.5; sy = sy < 0 ? 0 : sy > H - 1 ? H - 1 : sy;
+        const y0 = sy | 0, y1 = Math.min(H - 1, y0 + 1), fy = sy - y0;
+        for (let i = 0; i < D; i++) {
+          let sx = x + (i + 0.5) * k - 0.5; sx = sx < 0 ? 0 : sx > W - 1 ? W - 1 : sx;
+          const x0 = sx | 0, x1 = Math.min(W - 1, x0 + 1), fx = sx - x0;
+          const a = (y0 * W + x0) * 4, b = (y0 * W + x1) * 4, c = (y1 * W + x0) * 4, d = (y1 * W + x1) * 4, o = j * D + i;
+          for (let ch = 0; ch < 3; ch++) {
+            const v = (rgba[a + ch] * (1 - fx) + rgba[b + ch] * fx) * (1 - fy) + (rgba[c + ch] * (1 - fx) + rgba[d + ch] * fx) * fy;
+            out[ch * P + o] = mean ? (v - mean[ch]) / std[ch] : v;
+          }
+        }
+      }
+      return out;
+    }
+    function positions(L, T, stride) { const a = []; for (let p = 0; p < L - T; p += stride) a.push(p); a.push(Math.max(0, L - T)); return [...new Set(a)]; }
+
+    /* ---------- 1. Disegno neurale ---------- */
+    async function neuralMap(base, rgba, W, H) {
+      const s = await session(base, 'id', 'disegno neurale (18 MB)');
+      const T = Math.min(360, W, H), stride = Math.round(T * 0.7), xs = positions(W, T, stride), ys = positions(H, T, stride);
+      const acc = new Float32Array(W * H), wt = new Float32Array(W * H), han = new Float32Array(T);
+      for (let i = 0; i < T; i++) han[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * (i + 1) / (T + 1));
+      const N = xs.length * ys.length; let n = 0; const t0 = now();
+      for (const y of ys) for (const x of xs) {
+        check();
+        const inp = sampleTile(rgba, W, H, x, y, T, 512, null, null);
+        const res = await s.run({ [s.inputNames[0]]: new (getOrt().Tensor)('float32', inp, [1, 3, 512, 512]) });
+        const o = res[s.outputNames[0]].data, k = 512 / T;
+        for (let j = 0; j < T && y + j < H; j++) {
+          let sy = (j + 0.5) * k - 0.5; sy = sy < 0 ? 0 : sy > 511 ? 511 : sy; const y0 = sy | 0, y1 = Math.min(511, y0 + 1), fy = sy - y0;
+          for (let i = 0; i < T && x + i < W; i++) {
+            let sx = (i + 0.5) * k - 0.5; sx = sx < 0 ? 0 : sx > 511 ? 511 : sx; const x0 = sx | 0, x1 = Math.min(511, x0 + 1), fx = sx - x0;
+            const v = (o[y0 * 512 + x0] * (1 - fx) + o[y0 * 512 + x1] * fx) * (1 - fy) + (o[y1 * 512 + x0] * (1 - fx) + o[y1 * 512 + x1] * fx) * fy;
+            const w = han[i] * han[j] + 1e-3, p = (y + j) * W + x + i; acc[p] += v * w; wt[p] += w;
+          }
+        }
+        n++;
+        const el = now() - t0, eta = el / n * (N - n);
+        emit({ type: 'prog', stage: 'neural', frac: n / N, msg: 'Disegno neurale · ' + n + '/' + N, eta });
+        await pause();
+      }
+      const out = new Float32Array(W * H); for (let i = 0; i < W * H; i++) out[i] = wt[i] ? acc[i] / wt[i] : 1;
+      return out;
+    }
+
+    /* Punti di partenza per la segmentazione: il centro di ogni cella chiusa del disegno neurale */
+    function cellPrompts(nm, W, H) {
+      const N = W * H, wall = new Uint8Array(N); for (let i = 0; i < N; i++) wall[i] = nm[i] < 0.5 ? 1 : 0;
+      const dt = new Float32Array(N); const INF = 1e9;
+      for (let i = 0; i < N; i++) dt[i] = wall[i] ? 0 : INF;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!dt[i]) continue; let v = dt[i]; if (x > 0) v = Math.min(v, dt[i - 1] + 1); if (y > 0) { v = Math.min(v, dt[i - W] + 1); if (x > 0) v = Math.min(v, dt[i - W - 1] + 1.414); if (x < W - 1) v = Math.min(v, dt[i - W + 1] + 1.414); } dt[i] = v; }
+      for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const i = y * W + x; let v = dt[i]; if (!v) continue; if (x < W - 1) v = Math.min(v, dt[i + 1] + 1); if (y < H - 1) { v = Math.min(v, dt[i + W] + 1); if (x < W - 1) v = Math.min(v, dt[i + W + 1] + 1.414); if (x > 0) v = Math.min(v, dt[i + W - 1] + 1.414); } dt[i] = v; }
+      const lab = new Int32Array(N), out = []; let id = 0;
+      const k = Math.max(W, H) / 900, minA = 120 * k * k, maxA = 0.08 * N;
+      for (let s = 0; s < N; s++) {
+        if (wall[s] || lab[s]) continue;
+        id++; const comp = [s]; lab[s] = id; let best = s;
+        for (let q = 0; q < comp.length; q++) {
+          const i = comp[q], x = i % W;
+          if (dt[i] > dt[best]) best = i;
+          if (x > 0 && !wall[i - 1] && !lab[i - 1]) { lab[i - 1] = id; comp.push(i - 1); }
+          if (x < W - 1 && !wall[i + 1] && !lab[i + 1]) { lab[i + 1] = id; comp.push(i + 1); }
+          if (i >= W && !wall[i - W] && !lab[i - W]) { lab[i - W] = id; comp.push(i - W); }
+          if (i < N - W && !wall[i + W] && !lab[i + W]) { lab[i + W] = id; comp.push(i + W); }
+        }
+        if (comp.length >= minA && comp.length <= maxA) out.push([best % W, (best / W) | 0, comp.length]);
+      }
+      out.sort((a, b) => b[2] - a[2]);
+      return out;
+    }
+
+    /* Contorno (Moore) della maschera 256×256 attorno al pixel s */
+    function traceMask(m, s) {
+      const D = 256, lab = new Uint8Array(D * D), comp = [s]; lab[s] = 1;
+      for (let q = 0; q < comp.length; q++) { const i = comp[q], x = i & 255; for (const j of [x > 0 ? i - 1 : -1, x < 255 ? i + 1 : -1, i - D, i + D]) if (j >= 0 && j < D * D && m[j] > 0 && !lab[j]) { lab[j] = 1; comp.push(j); } }
+      let start = comp[0]; for (const i of comp) if (i < start) start = i;
+      const dirs = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+      const inside = (x, y) => x >= 0 && y >= 0 && x < D && y < D && lab[y * D + x] === 1;
+      let x = start & 255, y = start >> 8, d = 6; const pts = [];
+      const sx = x, sy = y;
+      for (let it = 0; it < 4 * D * D; it++) {
+        pts.push(x, y);
+        let found = false;
+        for (let k = 0; k < 8; k++) {
+          const nd = (d + 6 + k) % 8, nx = x + dirs[nd][0], ny = y + dirs[nd][1];
+          if (inside(nx, ny)) { x = nx; y = ny; d = nd; found = true; break; }
+        }
+        if (!found || (x === sx && y === sy && pts.length > 4)) break;
+      }
+      return { pts, area: comp.length };
+    }
+
+    /* ---------- 2. Segmentazione delle forme ---------- */
+    async function segment(base, rgba, W, H, nm) {
+      const enc = await session(base, 'enc', 'segmentazione (27 MB)'), dec = await session(base, 'dec', 'segmentazione (16 MB)');
+      const Tn = getOrt().Tensor, mean = [123.675, 116.28, 103.53], std = [58.395, 57.12, 57.375];
+      const zeros = new Float32Array(65536), hasM = new Float32Array([0]), osz = new Float32Array([256, 256]);
+      const cover = new Uint8Array(W * H), tried = new Uint8Array(W * H), polys = [];
+      const k = Math.max(W, H) / 900, cells = cellPrompts(nm, W, H);
+      // passaggi: uno largo (tutta la regione) per aperture e portali, poi riquadri fini per i dettagli
+      const Tc = Math.max(W, H), Tf = Math.min(360 * k, W, H), sf = Math.round(Tf * 0.75);
+      const tiles = [{ x: 0, y: 0, T: Tc, G: 12, coarse: true }];
+      for (const y of positions(H, Tf, sf)) for (const x of positions(W, Tf, sf)) tiles.push({ x, y, T: Tf, G: 14 });
+      let decodes = 0, nt = 0; const t0 = now();
+      for (const tl of tiles) {
+        check();
+        const emb = (await enc.run({ [enc.inputNames[0]]: new Tn('float32', sampleTile(rgba, W, H, tl.x, tl.y, tl.T, 1024, mean, std), [1, 3, 1024, 1024]) }))[enc.outputNames[0]];
+        const sc = 1024 / tl.T, mg = 0.05 * tl.T, pts = [];
+        if (!tl.coarse) for (const c of cells) if (c[0] > tl.x + mg && c[0] < tl.x + tl.T - mg && c[1] > tl.y + mg && c[1] < tl.y + tl.T - mg) pts.push([c[0], c[1]]);
+        const grid = [];
+        for (let a = 0; a < tl.G; a++) for (let b = 0; b < tl.G; b++) grid.push([tl.x + (0.04 + 0.92 * b / (tl.G - 1)) * tl.T + (Math.random() * 6 - 3) * k, tl.y + (0.04 + 0.92 * a / (tl.G - 1)) * tl.T + (Math.random() * 6 - 3) * k]);
+        for (let i = grid.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [grid[i], grid[j]] = [grid[j], grid[i]]; }
+        for (const g of grid) pts.push(g);
+        let local = 0;
+        for (const [px, py] of pts) {
+          check();
+          if (px < 0 || py < 0 || px >= W || py >= H) continue;
+          const xi = px | 0, yi = py | 0, pi = yi * W + xi;
+          if (cover[pi] || tried[pi] || nm[pi] < 0.45) continue;
+          const rr = Math.round(6 * k);
+          for (let yy = Math.max(0, yi - rr); yy <= Math.min(H - 1, yi + rr); yy++) for (let xx = Math.max(0, xi - rr); xx <= Math.min(W - 1, xi + rr); xx++) tried[yy * W + xx] = 1;
+          const o = await dec.run({ image_embeddings: emb, point_coords: new Tn('float32', new Float32Array([(px - tl.x) * sc, (py - tl.y) * sc, 0, 0]), [1, 2, 2]), point_labels: new Tn('float32', new Float32Array([1, -1]), [1, 2]), mask_input: new Tn('float32', zeros, [1, 1, 256, 256]), has_mask_input: new Tn('float32', hasM, [1]), orig_im_size: new Tn('float32', osz, [2]) });
+          decodes++; local++;
+          if (local % 8 === 0) { emit({ type: 'prog', stage: 'seg', frac: (nt + Math.min(0.95, local / Math.max(1, pts.length * 0.4))) / tiles.length, msg: 'Riconosco le forme · ' + polys.length + ' trovate', eta: nt ? (now() - t0) / nt * (tiles.length - nt) : null }); await pause(); }
+          if (o.iou_predictions.data[0] < 0.75) continue;
+          const low = o.low_res_masks.data, f = tl.T / 256;
+          // la maschera deve stare nella regione e non toccare i bordi del riquadro
+          const cx = Math.min(255, Math.max(0, ((px - tl.x) / f) | 0)), cy = Math.min(255, Math.max(0, ((py - tl.y) / f) | 0));
+          if (low[cy * 256 + cx] <= 0) continue;
+          const tr = traceMask(low, cy * 256 + cx), A = tr.area;
+          const maxA = tl.coarse ? 0.12 * (W * H) / (f * f) : 0.45 * 65536;
+          if (A < 94 * (tl.coarse ? 0.3 : 1) || A > maxA) continue;
+          let bord = 0; const lim = tl.coarse ? [Math.ceil(W / f), Math.ceil(H / f)] : [256, 256];
+          for (let i = 0; i < tr.pts.length; i += 2) { const x = tr.pts[i], y = tr.pts[i + 1]; if (x <= 0 || y <= 0 || x >= lim[0] - 1 || y >= lim[1] - 1) bord++; }
+          if (bord > 3) continue;
+          // doppione di una forma già trovata?
+          let tot = 0, cov = 0;
+          const pr = new Float32Array(tr.pts.length);
+          let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+          for (let i = 0; i < tr.pts.length; i += 2) { const X = tl.x + (tr.pts[i] + 0.5) * f, Y = tl.y + (tr.pts[i + 1] + 0.5) * f; pr[i] = X; pr[i + 1] = Y; minx = Math.min(minx, X); maxx = Math.max(maxx, X); miny = Math.min(miny, Y); maxy = Math.max(maxy, Y); }
+          for (let y = Math.max(0, miny | 0); y <= Math.min(H - 1, maxy | 0); y++) for (let x = Math.max(0, minx | 0); x <= Math.min(W - 1, maxx | 0); x++) {
+            const mx = ((x - tl.x) / f) | 0, my = ((y - tl.y) / f) | 0; if (mx < 0 || my < 0 || mx > 255 || my > 255 || low[my * 256 + mx] <= 0) continue;
+            tot++; if (cover[y * W + x]) cov++;
+          }
+          if (!tot || cov / tot > 0.6) continue;
+          for (let y = Math.max(0, miny | 0); y <= Math.min(H - 1, maxy | 0); y++) for (let x = Math.max(0, minx | 0); x <= Math.min(W - 1, maxx | 0); x++) {
+            const mx = ((x - tl.x) / f) | 0, my = ((y - tl.y) / f) | 0; if (mx >= 0 && my >= 0 && mx <= 255 && my <= 255 && low[my * 256 + mx] > 0) cover[y * W + x] = 1;
+          }
+          polys.push(pr);
+        }
+        nt++;
+        emit({ type: 'prog', stage: 'seg', frac: nt / tiles.length, msg: 'Riconosco le forme · ' + polys.length + ' trovate', eta: (now() - t0) / nt * (tiles.length - nt) });
+        await pause();
+      }
+      return { polys, decodes };
+    }
+
+    async function run(m) {
+      if (busy) { emit({ type: 'error', id: m.id, msg: 'Elaborazione già in corso' }); return; }
+      busy = true; cancelled = false;
+      const T = { start: now() };
+      try {
+        const nm = await neuralMap(m.base, m.rgba, m.W, m.H);
+        T.neural = now() - T.start;
+        emit({ type: 'neural', id: m.id, data: nm.slice(0) }, true);
+        let polys = [], decodes = 0;
+        if (m.detail) {
+          await release('id');
+          const t1 = now(); const r = await segment(m.base, m.rgba, m.W, m.H, nm);
+          polys = r.polys; decodes = r.decodes; T.seg = now() - t1;
+          await release('enc'); await release('dec');
+          emit({ type: 'polys', id: m.id, polys }, true);
+        }
+        emit({ type: 'done', id: m.id, timings: T, decodes, shapes: polys.length });
+      } catch (e) {
+        const c = e && e.message === '__cancel__';
+        emit({ type: c ? 'cancelled' : 'error', id: m.id, msg: c ? '' : String(e && e.message || e), init: !!(e && e.init) });
+      } finally {
+        busy = false;
+        if (cancelled) { await release('id'); await release('enc'); await release('dec'); }
+      }
+    }
+    return {
+      handle(m) {
+        if (m.type === 'cancel') { cancelled = true; return; }
+        if (m.type === 'run') run(m);
+        if (m.type === 'free') { release('id'); release('enc'); release('dec'); }
+      },
+    };
+  }
+
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const QS = new URLSearchParams(location.search);
+  const ORT_URL = QS.get('ort') ? new URL(QS.get('ort'), location.href).href : 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js';
+  const ORT_DIR = ORT_URL.replace(/[^/]*$/, '');
+  const MODEL_BASE = new URL(QS.get('models') || '../prova-ai/modelli/', location.href).href;
+  const fmtInt = (n) => Math.round(n).toLocaleString('it-IT');
+  const fmt1 = (n) => n.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  const fmtTime = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; };
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const now = () => performance.now();
+
+  const LAYERS = [
+    { name: 'STRUTTURA', label: 'Struttura', desc: 'Contorni principali, cornici, fasce', w: 0.5, aci: 7, v: '--l0', px: 2.2 },
+    { name: 'ELEMENTI', label: 'Elementi', desc: 'Aperture, archi, cerchi, balconi', w: 0.35, aci: 5, v: '--l1', px: 1.6 },
+    { name: 'DETTAGLI', label: 'Dettagli', desc: 'Conci, mattoni, tessitura', w: 0.18, aci: 8, v: '--l2', px: 1 },
+    { name: 'RICOSTRUZIONI', label: 'Ricostruzioni stimate', desc: 'Forme e giunzioni dedotte, da verificare', w: 0.25, aci: 30, v: '--l3', px: 1.5, dash: true },
+  ];
+  const MODES = {
+    detail: { label: 'Dettagliata', desc: 'Disegno neurale e riconoscimento delle forme: conci, finestre, archi chiusi e regolarizzati. Qualche minuto (su iPhone circa 5).' },
+    fast: { label: 'Rapida', desc: 'Solo disegno neurale, poi linee e archi regolarizzati. Circa un minuto su iPhone.' },
+    classic: { label: 'Classica', desc: 'Metodo geometrico senza AI: immediato e senza scaricare modelli, ma meno preciso sulle murature.' },
+  };
+
+  const S = {
+    phase: 'empty', mode: 'detail', view: 'draw', name: '', srcCv: null, img: null, W: 0, H: 0, gray: null,
+    box: null, ref: null, paths: [], info: {}, show: [true, true, true, true], edit: false, sel: -1, undo: [],
+    aiId: 0, ai: null, prog: { frac: 0, msg: '', eta: null }, t0: 0, timings: {}, sheet: 'peek', classic: 'arch',
+  };
+
+  /* ---------- avvisi ---------- */
+  let toastT = 0;
+  function say(msg, ms) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, ms || 3200); }
+
+  /* ---------- motore geometrico (worker, con ripiego nel thread principale) ---------- */
+  const Eng = (() => {
+    let w = null, direct = null, seq = 0;
+    const pend = new Map();
+    function fallback() {
+      if (direct) return;
+      direct = makeEngine(); w = null;
+      if (S.gray) direct.setImage(S.W, S.H, S.gray);
+      for (const p of pend.values()) p.retry();
+      pend.clear();
+    }
+    try {
+      const src = makeEngine.toString() + ';var E=makeEngine();onmessage=function(ev){var m=ev.data,r=null;try{if(m.type==="img")E.setImage(m.W,m.H,m.gray);else if(m.type==="run")r=E.run(m.p);else if(m.type==="detect")r=E.detect();postMessage({id:m.id,ok:true,r:r});}catch(err){postMessage({id:m.id,ok:false,msg:String(err&&err.message||err)});}};';
+      w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      w.onmessage = (ev) => { const m = ev.data, p = pend.get(m.id); if (!p) return; pend.delete(m.id); if (m.ok) p.res(m.r); else p.rej(new Error(m.msg)); };
+      w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); fallback(); };
+    } catch (e) { w = null; }
+    function runDirect(type, pl) {
+      if (!direct) { direct = makeEngine(); if (S.gray && type !== 'img') direct.setImage(S.W, S.H, S.gray); }
+      return type === 'img' ? direct.setImage(pl.W, pl.H, pl.gray) : type === 'run' ? direct.run(pl.p) : direct.detect();
+    }
+    function call(type, pl, tr) {
+      if (!w) return new Promise((res, rej) => setTimeout(() => { try { res(runDirect(type, pl)); } catch (e) { rej(e); } }, 16));
+      const id = ++seq;
+      return new Promise((res, rej) => {
+        pend.set(id, { res, rej, retry: () => setTimeout(() => { try { res(runDirect(type, pl)); } catch (e) { rej(e); } }, 0) });
+        try { w.postMessage(Object.assign({ type, id }, pl), tr || []); } catch (e) { pend.delete(id); fallback(); res(runDirect(type, pl)); }
+      });
+    }
+    return { call, get mode() { return w ? 'worker' : 'principale'; } };
+  })();
+
+  /* ---------- motore AI (worker con ONNX Runtime; ripiego nel thread principale) ---------- */
+  const AIW = (() => {
+    let w = null, main = null, ready = null, mode = '—';
+    function src() {
+      return makeAI.toString() + ';var __err=null;try{importScripts(' + JSON.stringify(ORT_URL) + ');ort.env.wasm.numThreads=1;ort.env.wasm.wasmPaths=' + JSON.stringify(ORT_DIR) + ';}catch(e){__err=String(e&&e.message||e);}' +
+        'var A=null;onmessage=function(ev){var m=ev.data;if(m.type==="ping"){postMessage({type:"pong",err:__err});return;}if(!A)A=makeAI(function(msg,tr){var t=[];if(tr){if(msg.data)t.push(msg.data.buffer);if(msg.polys)msg.polys.forEach(function(p){t.push(p.buffer);});}postMessage(msg,t);},function(){return ort;});A.handle(m);};';
+    }
+    function startMain() {
+      if (w) { try { w.terminate(); } catch (e) { /* già chiuso */ } w = null; }
+      mode = 'thread principale';
+      return new Promise((res, rej) => {
+        const go = () => { try { ort.env.wasm.numThreads = 1; ort.env.wasm.wasmPaths = ORT_DIR; } catch (e) { /* versione diversa */ } main = makeAI((m) => setTimeout(() => onAI(m), 0), () => window.ort); res(); };
+        if (window.ort) { go(); return; }
+        const s = document.createElement('script'); s.src = ORT_URL; s.async = true;
+        s.onload = go; s.onerror = () => rej(new Error('Non riesco a caricare il motore AI. Serve la connessione a internet la prima volta.'));
+        document.head.appendChild(s);
+      });
+    }
+    function init() {
+      if (ready) return ready;
+      ready = new Promise((resolve, reject) => {
+        let done = false;
+        const fin = (ok) => { if (done) return; done = true; if (ok) { mode = 'Web Worker'; resolve(); } else startMain().then(resolve, (e) => { ready = null; reject(e); }); };
+        try {
+          w = new Worker(URL.createObjectURL(new Blob([src()], { type: 'text/javascript' })));
+          w.onmessage = (ev) => { const m = ev.data; if (m.type === 'pong') { fin(!m.err); return; } onAI(m); };
+          w.onerror = (e) => { if (e.preventDefault) e.preventDefault(); if (!done) fin(false); else onAI({ type: 'error', id: S.aiId, msg: 'Il worker AI si è interrotto (memoria insufficiente?). Riprova con la modalità Rapida o una risoluzione più bassa.' }); };
+          w.postMessage({ type: 'ping' });
+          setTimeout(() => fin(false), 25000);
+        } catch (e) { fin(false); }
+      });
+      return ready;
+    }
+    function post(m, tr) { if (w) w.postMessage(m, tr || []); else if (main) main.handle(m); }
+    function toMain() { ready = startMain(); return ready; }
+    return { init, post, toMain, get inWorker() { return !!w; }, get mode() { return mode; } };
+  })();
+
+  /* ---------- foto ---------- */
+  function loadFile(file) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith('image/')) { say('Questo file non è un\'immagine.'); return; }
+    const url = URL.createObjectURL(file), im = new Image();
+    im.decoding = 'async';
+    im.onload = () => { setSource(im, file.name || 'foto'); URL.revokeObjectURL(url); };
+    im.onerror = () => { URL.revokeObjectURL(url); say('Il browser non riesce ad aprire questo formato. Prova con JPG, PNG o HEIC da Foto.'); };
+    im.src = url;
+  }
+  function setSource(el, name) {
+    cancelRun(true);
+    const w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+    const ks = Math.min(1, 2400 / Math.max(w, h)), src = document.createElement('canvas');
+    src.width = Math.max(8, Math.round(w * ks)); src.height = Math.max(8, Math.round(h * ks));
+    const sx = src.getContext('2d'); sx.fillStyle = '#fff'; sx.fillRect(0, 0, src.width, src.height); sx.drawImage(el, 0, 0, src.width, src.height);
+    const kv = Math.min(1, 1600 / Math.max(w, h)), W = Math.max(8, Math.round(w * kv)), H = Math.max(8, Math.round(h * kv));
+    const img = document.createElement('canvas'); img.width = W; img.height = H;
+    const ix = img.getContext('2d', { willReadFrequently: true }); ix.imageSmoothingQuality = 'high'; ix.drawImage(src, 0, 0, W, H);
+    const d = ix.getImageData(0, 0, W, H).data, g = new Float32Array(W * H);
+    for (let i = 0, p = 0; i < g.length; i++, p += 4) g[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+    Object.assign(S, { srcCv: src, img, W, H, gray: g, name, paths: [], info: {}, ref: null, undo: [], sel: -1, ai: null, edit: false });
+    S.box = [Math.round(W * 0.06), Math.round(H * 0.06), Math.round(W * 0.94), Math.round(H * 0.94)];
+    Eng.call('img', { W, H, gray: g.slice() }).then(() => Eng.call('detect', {})).then((b) => {
+      if (b && b[2] - b[0] > W * 0.2 && b[3] - b[1] > H * 0.15 && S.phase === 'box') { S.box = b; requestDraw(); }
+    }).catch(() => { /* resta il riquadro predefinito */ });
+    rebuild(); setEdit(false); setPhase('box'); fitView(false, true);
+  }
+  function makeSample() {
+    const W = 1200, H = 900, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const sky = x.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#7fa8d6'); sky.addColorStop(1, '#cfdde9'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#b9a58a'; x.fillRect(0, 700, W, 200);
+    x.fillStyle = '#d8c8a6'; x.fillRect(240, 160, 720, 560);
+    x.strokeStyle = '#8c7a5c'; x.lineWidth = 3;
+    for (let y = 200; y < 720; y += 40) { x.beginPath(); x.moveTo(240, y); x.lineTo(960, y); x.stroke(); const off = ((y / 40) % 2) * 45; for (let xx = 240 + off; xx < 960; xx += 90) { x.beginPath(); x.moveTo(xx, y - 40); x.lineTo(xx, y); x.stroke(); } }
+    x.fillStyle = '#c9b38c'; x.fillRect(220, 140, 760, 26);
+    const arch = (cx, top, w, h) => { x.fillStyle = '#2b2620'; x.beginPath(); x.moveTo(cx - w / 2, top + h); x.lineTo(cx - w / 2, top + w / 2); x.arc(cx, top + w / 2, w / 2, Math.PI, 0); x.lineTo(cx + w / 2, top + h); x.closePath(); x.fill(); };
+    arch(420, 470, 130, 250); arch(780, 470, 130, 250); arch(360, 230, 70, 130); arch(600, 230, 70, 130); arch(840, 230, 70, 130);
+    x.fillStyle = '#3b342b'; for (const cx of [300, 480, 720, 900]) { x.beginPath(); x.arc(cx, 400, 14, 0, 2 * Math.PI); x.fill(); }
+    const im = new Image(); im.onload = () => setSource(im, 'esempio.png'); im.src = c.toDataURL('image/png');
+  }
+
+  /* ---------- conversione ---------- */
+  function convert() {
+    if (!S.img || S.phase === 'run') return;
+    S.paths = []; S.sel = -1; S.undo = []; S.timings = {}; S.t0 = now(); S.prog = { frac: 0, msg: 'Preparazione…', eta: null };
+    rebuild();
+    if (S.mode === 'classic') { runClassic(true); return; }
+    const [x0, y0, x1, y1] = S.box, k = S.srcCv.width / S.W, sw = (x1 - x0) * k, sh = (y1 - y0) * k;
+    const L = +$('ai-res').value, f = Math.min(2, L / Math.max(sw, sh)), rw = Math.max(64, Math.round(sw * f)), rh = Math.max(64, Math.round(sh * f));
+    const c = document.createElement('canvas'); c.width = rw; c.height = rh;
+    const cx = c.getContext('2d', { willReadFrequently: true }); cx.imageSmoothingQuality = 'high';
+    cx.drawImage(S.srcCv, x0 * k, y0 * k, sw, sh, 0, 0, rw, rh);
+    const rgba = cx.getImageData(0, 0, rw, rh).data, gray = new Uint8Array(rw * rh);
+    for (let i = 0, p = 0; i < gray.length; i++, p += 4) gray[i] = (0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]) | 0;
+    S.ai = { rw, rh, gray, rgba: new Uint8ClampedArray(rgba), neural: null, polys: [], ox: x0, oy: y0, sx: (x1 - x0) / rw, detail: S.mode === 'detail' };
+    S.ref = [x0, y0, x1, y1];
+    const id = ++S.aiId;
+    setPhase('run');
+    AIW.init().then(() => {
+      if (id !== S.aiId) return;
+      const buf = new Uint8ClampedArray(rgba);
+      AIW.post({ type: 'run', id, rgba: buf, W: rw, H: rh, detail: S.mode === 'detail', base: MODEL_BASE }, [buf.buffer]);
+    }).catch((e) => { if (id === S.aiId) { say(e.message, 6000); setPhase('box'); } });
+  }
+  function onAI(m) {
+    if (m.type === 'prog') { if (S.phase === 'run') { S.prog = m; renderProgress(); } return; }
+    if (m.id !== S.aiId || !S.ai) return;
+    if (m.type === 'neural') {
+      S.ai.neural = m.data; S.timings.neural = now() - S.t0;
+      vectorize(!S.ai.detail);
+    } else if (m.type === 'polys') {
+      S.ai.polys = m.polys; S.timings.seg = now() - S.t0;
+      vectorize(true);
+    } else if (m.type === 'done') {
+      S.timings.ai = m.timings; S.timings.decodes = m.decodes;
+    } else if (m.type === 'cancelled') {
+      setPhase(S.paths.length ? 'result' : 'box'); say('Conversione interrotta.');
+    } else if (m.type === 'error' && m.init && AIW.inWorker) {
+      // il motore AI non parte dentro il worker su questo browser: riprovo nel thread principale
+      S.prog = { frac: 0, msg: 'Avvio il motore AI in modalità compatibile…', eta: null }; renderProgress();
+      AIW.toMain().then(() => { if (m.id !== S.aiId) return; const buf = new Uint8ClampedArray(S.ai.rgba); AIW.post({ type: 'run', id: m.id, rgba: buf, W: S.ai.rw, H: S.ai.rh, detail: S.ai.detail, base: MODEL_BASE }); })
+        .catch((e) => { say(e.message, 6000); setPhase('box'); });
+    } else if (m.type === 'error') {
+      say(m.msg || 'Errore durante la conversione.', 7000); setPhase(S.paths.length ? 'result' : 'box');
+    }
+  }
+  let vecSeq = 0;
+  function vectorize(final) {
+    const A = S.ai; if (!A || !A.neural) return;
+    const my = ++vecSeq, t = now();
+    const pl = { rw: A.rw, rh: A.rh, neural: A.neural.slice(0), gray: A.gray.slice(0), polys: A.polys.map((p) => p.slice(0)), ox: A.ox, oy: A.oy, sx: A.sx };
+    const tr = [pl.neural.buffer, pl.gray.buffer].concat(pl.polys.map((p) => p.buffer));
+    if (S.phase === 'run' && !final) S.prog = { frac: S.prog.frac, msg: 'Anteprima del disegno…', eta: S.prog.eta };
+    Eng.call('run', { p: { mode: 'ai', ai: pl, aiThr: +$('ai-thr').value / 100 } }, tr).then((r) => {
+      if (my !== vecSeq) return;
+      S.paths = r.paths; S.info = r.info; S.timings.vec = now() - t; S.sel = -1; S.undo = [];
+      rebuild();
+      if (final) { S.timings.total = now() - S.t0; setPhase('result'); fitView(true); }
+      else if (S.phase === 'run') { renderProgress(); say('Anteprima pronta: continuo con il riconoscimento delle forme.'); }
+    }).catch((e) => { say('Errore nella vettorizzazione: ' + e.message, 6000); setPhase('box'); });
+  }
+  let classicT = 0, classicSeq = 0;
+  function runClassic(first) {
+    const my = ++classicSeq, t = now();
+    if (first) { S.ref = [0, 0, S.W, S.H]; setPhase('run'); S.prog = { frac: 0.5, msg: 'Metodo classico…', eta: null }; renderProgress(); }
+    Eng.call('run', { p: classicParams() }).then((r) => {
+      if (my !== classicSeq) return;
+      S.paths = r.paths.map((p) => (p.l === undefined ? Object.assign(p, { l: 1 }) : p)); S.info = r.info; S.timings = { total: now() - t, vec: now() - t };
+      S.sel = -1; S.undo = []; rebuild(); if (first || S.phase !== 'result') { setPhase('result'); fitView(true); } else renderStep();
+    }).catch((e) => { say('Errore: ' + e.message, 6000); setPhase('box'); });
+  }
+  function cancelRun(silent) {
+    if (S.phase !== 'run') return;
+    S.aiId++; AIW.post({ type: 'cancel' }); classicSeq++;
+    if (!silent) { setPhase(S.paths.length ? 'result' : 'box'); say('Conversione interrotta.'); }
+  }
+
+  /* ---------- parametri del metodo classico ---------- */
+  const DEF = {
+    edges: { sens: 55, blur: 12, simp: 10, minlen: 14, merge: 20, straight: false },
+    arch: { sens: 45, blur: 16, simp: 15, minlen: 30, merge: 30, straight: true },
+    shape: { blur: 15, simp: 8, minlen: 20, merge: 20, straight: false },
+  };
+  function classicParams() {
+    return { mode: S.classic, autoAll: $('autoall').checked && S.classic === 'arch', sens: +$('sens').value, blur: +$('blur').value / 10, simp: +$('simp').value / 10, minlen: +$('minlen').value, merge: +$('merge').value / 10, arcs: $('arcs').checked, straight: $('straight').checked, auto: $('auto').checked, thr: +$('thr').value, inv: $('inv').checked };
+  }
+  function updateLabels() {
+    const p = classicParams();
+    $('o-sens').textContent = p.sens + '%'; $('o-blur').textContent = fmt1(p.blur) + ' px'; $('o-simp').textContent = fmt1(p.simp) + ' px';
+    $('o-min').textContent = p.minlen + ' px'; $('o-merge').textContent = p.merge > 0 ? fmt1(p.merge) + ' px' : 'no'; $('o-thr').textContent = p.auto ? 'auto' : String(p.thr);
+    $('o-aithr').textContent = $('ai-thr').value;
+    const auto = $('autoall').checked && S.classic === 'arch';
+    for (const id of ['sens', 'blur', 'simp', 'minlen', 'merge']) $(id).disabled = auto;
+    $('f-shape').hidden = S.classic !== 'shape'; $('thr').disabled = $('auto').checked;
+  }
+
+  /* ---------- geometria del disegno: Path2D per livello, indice per la selezione ---------- */
+  let P2D = [null, null, null, null], GEO = [];
+  function arcCenter(P, Q, b) {
+    const dx = Q[0] - P[0], dy = Q[1] - P[1], c = Math.hypot(dx, dy), th = 4 * Math.atan(Math.abs(b)), r = c / (2 * Math.sin(th / 2)), sg = b > 0 ? 1 : -1;
+    const nx = -dy / c, ny = dx / c, s = Math.abs(b) * c / 2;
+    return { cx: (P[0] + Q[0]) / 2 + nx * sg * (s - r), cy: (P[1] + Q[1]) / 2 + ny * sg * (s - r), r };
+  }
+  function rebuild() {
+    P2D = [new Path2D(), new Path2D(), new Path2D(), new Path2D()]; GEO = [];
+    S.paths.forEach((p, idx) => {
+      const v = p.v, n = v.length / 2, m = p.c ? n : n - 1, path = P2D[p.l], pts = [v[0], v[1]];
+      path.moveTo(v[0], v[1]);
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, b = p.b[i];
+        if (!b) { path.lineTo(v[2 * j], v[2 * j + 1]); pts.push(v[2 * j], v[2 * j + 1]); continue; }
+        const P = [v[2 * i], v[2 * i + 1]], Q = [v[2 * j], v[2 * j + 1]], a = arcCenter(P, Q, b);
+        const a0 = Math.atan2(P[1] - a.cy, P[0] - a.cx), a1 = Math.atan2(Q[1] - a.cy, Q[0] - a.cx);
+        path.arc(a.cx, a.cy, a.r, a0, a1, b > 0);
+        const th = 4 * Math.atan(Math.abs(b)), K = Math.max(2, Math.ceil(th / 0.3));
+        for (let q = 1; q <= K; q++) { const ang = a0 + (b > 0 ? -1 : 1) * th * q / K; pts.push(a.cx + a.r * Math.cos(ang), a.cy + a.r * Math.sin(ang)); }
+      }
+      if (p.c) path.closePath();
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); y0 = Math.min(y0, pts[i + 1]); y1 = Math.max(y1, pts[i + 1]); }
+      GEO[idx] = { pts: Float32Array.from(pts), bb: [x0, y0, x1, y1] };
+    });
+    renderLayers(); renderStats(); updateButtons(); requestDraw();
+  }
+  function hitTest(x, y, tol) {
+    let best = -1, bd = tol;
+    S.paths.forEach((p, i) => {
+      if (!S.show[p.l]) return;
+      const g = GEO[i], b = g.bb;
+      if (x < b[0] - tol || x > b[2] + tol || y < b[1] - tol || y > b[3] + tol) return;
+      const q = g.pts;
+      for (let k = 0; k + 3 < q.length; k += 2) {
+        const ax = q[k], ay = q[k + 1], dx = q[k + 2] - ax, dy = q[k + 3] - ay, l2 = dx * dx + dy * dy;
+        const t = l2 ? clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0, 1) : 0, d = Math.hypot(x - ax - t * dx, y - ay - t * dy);
+        if (d < bd) { bd = d; best = i; }
+      }
+    });
+    return best;
+  }
+
+  /* ---------- disegno sul canvas ---------- */
+  const vp = $('vp'), cv = $('cv'), ctx = cv.getContext('2d', { alpha: false });
+  const V = { s: 1, tx: 0, ty: 0 };
+  let dpr = 1, VW = 0, VH = 0, raf = 0, colors = {};
+  function readColors() { const cs = getComputedStyle(document.documentElement); for (const k of ['--canvas', '--sheet', '--grid', '--l0', '--l1', '--l2', '--l3', '--accent']) colors[k] = cs.getPropertyValue(k).trim(); requestDraw(); }
+  function resize() {
+    const r = vp.getBoundingClientRect(); dpr = Math.min(window.devicePixelRatio || 1, 2); if (r.width * r.height * dpr * dpr > 4.2e6) dpr = Math.max(1, Math.sqrt(4.2e6 / (r.width * r.height)));
+    const nw = Math.max(1, Math.round(r.width * dpr)), nh = Math.max(1, Math.round(r.height * dpr));
+    const wasEmpty = !VW; VW = r.width; VH = r.height;
+    if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh; }
+    if (wasEmpty && S.img) fitView(false);
+    requestDraw();
+  }
+  function requestDraw() { if (!raf) raf = requestAnimationFrame(draw); }
+  let V0 = null, settleT = 0;
+  /* Vista cambiata da un gesto: sposta la bitmap con il compositore (nessun ridisegno), poi ridisegna nitido */
+  function moved() {
+    if (!V0 || !S.img) { requestDraw(); return; }
+    const k = V.s / V0.s;
+    cv.style.transform = 'translate3d(' + (V.tx - k * V0.tx).toFixed(2) + 'px,' + (V.ty - k * V0.ty).toFixed(2) + 'px,0) scale(' + k.toFixed(5) + ')';
+    zoomLabel();
+    clearTimeout(settleT); settleT = setTimeout(requestDraw, 140);
+  }
+  function zoomLabel() { const z = Math.round(V.s * 100) + '%'; if (z !== lastZoom) { lastZoom = z; $('zoom').textContent = z; } }
+  let lastZoom = '';
+  function draw() {
+    raf = 0;
+    clearTimeout(settleT);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = colors['--canvas'] || '#e6e8ec'; ctx.fillRect(0, 0, cv.width, cv.height);
+    if (!S.img) { V0 = null; cv.style.transform = ''; return; }
+    const s = V.s, W = S.W, H = S.H;
+    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * V.tx, dpr * V.ty);
+    ctx.fillStyle = colors['--sheet']; ctx.fillRect(0, 0, W, H);
+    // griglia di disegno che segue lo zoom
+    const target = 48 / s, e = Math.pow(10, Math.floor(Math.log10(target))), g = target / e < 2 ? 2 * e : target / e < 5 ? 5 * e : 10 * e;
+    const vx0 = Math.max(0, -V.tx / s), vy0 = Math.max(0, -V.ty / s), vx1 = Math.min(W, (VW - V.tx) / s), vy1 = Math.min(H, (VH - V.ty) / s);
+    if (vx1 > vx0 && vy1 > vy0 && S.view !== 'photo') {
+      ctx.beginPath();
+      for (let x = Math.ceil(vx0 / g) * g; x <= vx1; x += g) { ctx.moveTo(x, vy0); ctx.lineTo(x, vy1); }
+      for (let y = Math.ceil(vy0 / g) * g; y <= vy1; y += g) { ctx.moveTo(vx0, y); ctx.lineTo(vx1, y); }
+      ctx.lineWidth = 1 / s; ctx.strokeStyle = colors['--grid']; ctx.stroke();
+    }
+    const showPhoto = S.view === 'photo' || S.view === 'over' || S.phase === 'box' || (S.phase === 'run' && !S.paths.length);
+    if (showPhoto) {
+      ctx.globalAlpha = S.view === 'over' && S.paths.length ? 0.45 : 1;
+      ctx.imageSmoothingEnabled = true; ctx.drawImage(S.img, 0, 0, W, H); ctx.globalAlpha = 1;
+    }
+    if (S.view !== 'photo' && S.paths.length) {
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let l = 3; l >= 0; l--) {
+        if (!S.show[l]) continue;
+        const L = LAYERS[l];
+        ctx.lineWidth = L.px / s; ctx.strokeStyle = colors[L.v];
+        ctx.setLineDash(L.dash ? [5 / s, 4 / s] : []);
+        ctx.stroke(P2D[l]);
+      }
+      ctx.setLineDash([]);
+      if (S.sel >= 0 && S.paths[S.sel]) {
+        const one = new Path2D(), g2 = GEO[S.sel].pts; one.moveTo(g2[0], g2[1]); for (let k = 2; k < g2.length; k += 2) one.lineTo(g2[k], g2[k + 1]);
+        ctx.lineWidth = 7 / s; ctx.strokeStyle = 'rgba(10,96,216,0.22)'; ctx.stroke(one);
+        ctx.lineWidth = 2.4 / s; ctx.strokeStyle = colors['--accent']; ctx.stroke(one);
+      }
+    }
+    if (S.phase === 'box' || S.phase === 'run') drawBox(s);
+    zoomLabel(); V0 = { s: V.s, tx: V.tx, ty: V.ty }; if (cv.style.transform) cv.style.transform = '';
+  }
+  function drawBox(s) {
+    const [x0, y0, x1, y1] = S.box, W = S.W, H = S.H;
+    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.rect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = S.phase === 'run' ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.38)'; ctx.fill('evenodd');
+    ctx.lineWidth = 2 / s; ctx.strokeStyle = colors['--accent']; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    if (S.phase !== 'box') return;
+    ctx.lineWidth = 1 / s; ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.setLineDash([4 / s, 4 / s]);
+    ctx.beginPath(); for (const f of [1 / 3, 2 / 3]) { ctx.moveTo(x0 + (x1 - x0) * f, y0); ctx.lineTo(x0 + (x1 - x0) * f, y1); ctx.moveTo(x0, y0 + (y1 - y0) * f); ctx.lineTo(x1, y0 + (y1 - y0) * f); } ctx.stroke(); ctx.setLineDash([]);
+    const r = 8 / s;
+    for (const [hx, hy] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      ctx.beginPath(); ctx.arc(hx, hy, r, 0, 2 * Math.PI); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2.5 / s; ctx.strokeStyle = colors['--accent']; ctx.stroke();
+    }
+    ctx.fillStyle = colors['--accent'];
+    for (const [hx, hy] of [[(x0 + x1) / 2, y0], [(x0 + x1) / 2, y1], [x0, (y0 + y1) / 2], [x1, (y0 + y1) / 2]]) { ctx.beginPath(); ctx.arc(hx, hy, 4.5 / s, 0, 2 * Math.PI); ctx.fill(); }
+  }
+
+  /* ---------- vista: adatta, molle, inerzia ---------- */
+  function contentInsets() {
+    const wide = window.innerWidth >= 900;
+    const peek = wide || S.phase === 'empty' ? 0 : sheetVisible();
+    return { top: 64, bottom: peek + 16, left: 16, right: wide ? 64 : 60 };
+  }
+  function fitTarget(rect) {
+    const [x0, y0, x1, y1] = rect || [0, 0, S.W, S.H], I = contentInsets();
+    const aw = Math.max(40, VW - I.left - I.right), ah = Math.max(40, VH - I.top - I.bottom);
+    const s = Math.min(aw / (x1 - x0), ah / (y1 - y0));
+    return { s, tx: I.left + (aw - (x1 - x0) * s) / 2 - x0 * s, ty: I.top + (ah - (y1 - y0) * s) / 2 - y0 * s };
+  }
+  function fitView(animate, whole) {
+    if (!S.img || !VW) return;
+    const t = fitTarget(whole || !S.ref || S.phase === 'box' ? null : S.ref);
+    if (animate) springTo(t); else { stopAnim(); Object.assign(V, t); requestDraw(); }
+  }
+  let anim = null;
+  function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } }
+  function springTo(t) {
+    stopAnim();
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { Object.assign(V, t); requestDraw(); return; }
+    const w = 2 * Math.PI / 0.38, st = { s: [V.s, 0], tx: [V.tx, 0], ty: [V.ty, 0] };
+    let last = now();
+    const step = () => {
+      const tn = now(), dt = Math.min(0.032, (tn - last) / 1000); last = tn;
+      let done = true;
+      for (const k of ['s', 'tx', 'ty']) {
+        const [x, v] = st[k], a = -w * w * (x - t[k]) - 2 * w * v, nv = v + a * dt, nx = x + nv * dt;
+        st[k] = [nx, nv];
+        if (Math.abs(nx - t[k]) > (k === 's' ? 1e-4 * t.s : 0.3) || Math.abs(nv) > (k === 's' ? 1e-3 : 1)) done = false;
+      }
+      V.s = st.s[0]; V.tx = st.tx[0]; V.ty = st.ty[0];
+      if (done) { Object.assign(V, t); anim = null; requestDraw(); } else { anim.raf = requestAnimationFrame(step); moved(); }
+    };
+    anim = { raf: requestAnimationFrame(step) };
+  }
+  function momentum(vx, vy) {
+    stopAnim();
+    if (Math.hypot(vx, vy) < 0.05 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let last = now();
+    const step = () => {
+      const tn = now(), dt = Math.min(32, tn - last); last = tn;
+      V.tx += vx * dt; V.ty += vy * dt;
+      const d = Math.pow(0.996, dt); vx *= d; vy *= d;
+      moved();
+      if (Math.hypot(vx, vy) < 0.02) { anim = null; requestDraw(); return; }
+      anim.raf = requestAnimationFrame(step);
+    };
+    anim = { raf: requestAnimationFrame(step) };
+  }
+  function zoomAt(px, py, f) {
+    const s = clamp(V.s * f, minScale(), 60), k = s / V.s;
+    V.tx = px - (px - V.tx) * k; V.ty = py - (py - V.ty) * k; V.s = s; moved();
+  }
+  const minScale = () => (S.img ? 0.25 * Math.min(VW / S.W, VH / S.H) : 0.05);
+
+  /* ---------- gesti: trascina, pizzica, doppio tocco, rotella ---------- */
+  const ptrs = new Map();
+  let gest = null, lastTap = { t: 0, x: 0, y: 0 };
+  const local = (e) => { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const toImg = (p) => ({ x: (p.x - V.tx) / V.s, y: (p.y - V.ty) / V.s });
+  function boxHit(p) {
+    if (S.phase !== 'box' || !S.box) return null;
+    const [x0, y0, x1, y1] = S.box, s = V.s, X0 = x0 * s + V.tx, Y0 = y0 * s + V.ty, X1 = x1 * s + V.tx, Y1 = y1 * s + V.ty, R = 24;
+    const near = (a, b) => Math.abs(a - b) < R;
+    if (near(p.x, X0) && near(p.y, Y0)) return 'nw'; if (near(p.x, X1) && near(p.y, Y0)) return 'ne';
+    if (near(p.x, X0) && near(p.y, Y1)) return 'sw'; if (near(p.x, X1) && near(p.y, Y1)) return 'se';
+    const inY = p.y > Y0 && p.y < Y1, inX = p.x > X0 && p.x < X1;
+    if (inY && near(p.x, X0)) return 'w'; if (inY && near(p.x, X1)) return 'e';
+    if (inX && near(p.y, Y0)) return 'n'; if (inX && near(p.y, Y1)) return 's';
+    return null;
+  }
+  const CURS = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
+  function pinchState() { const [a, b] = [...ptrs.values()]; return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)) }; }
+  cv.addEventListener('pointerdown', (e) => {
+    if (!S.img) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    cv.setPointerCapture(e.pointerId); stopAnim();
+    const p = local(e); ptrs.set(e.pointerId, p);
+    if (ptrs.size === 1) {
+      const h = boxHit(p);
+      gest = h ? { kind: 'box', h, p0: p, b0: S.box.slice() } : { kind: 'pan', p0: p, last: p, moved: false, hist: [{ x: p.x, y: p.y, t: now() }] };
+    } else if (ptrs.size === 2) {
+      const st = pinchState(); gest = { kind: 'pinch', st, s0: V.s, tx0: V.tx, ty0: V.ty };
+    }
+    if (gest && gest.kind !== 'box') vp.classList.add('grabbing');
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const p = local(e);
+    if (!ptrs.has(e.pointerId)) {
+      if (e.pointerType === 'mouse' && S.phase === 'box') { const h = boxHit(p); cv.style.cursor = h ? CURS[h] : ''; }
+      return;
+    }
+    ptrs.set(e.pointerId, p);
+    if (!gest) return;
+    if (gest.kind === 'pan') {
+      if (!gest.moved && Math.hypot(p.x - gest.p0.x, p.y - gest.p0.y) > 6) gest.moved = true;
+      if (gest.moved) { V.tx += p.x - gest.last.x; V.ty += p.y - gest.last.y; moved(); }
+      gest.last = p; gest.hist.push({ x: p.x, y: p.y, t: now() }); if (gest.hist.length > 6) gest.hist.shift();
+    } else if (gest.kind === 'pinch' && ptrs.size >= 2) {
+      const st = pinchState(), s = clamp(gest.s0 * st.d / gest.st.d, minScale(), 60), k = s / gest.s0;
+      V.s = s; V.tx = st.cx - (gest.st.cx - gest.tx0) * k; V.ty = st.cy - (gest.st.cy - gest.ty0) * k; moved();
+    } else if (gest.kind === 'box') {
+      const dx = (p.x - gest.p0.x) / V.s, dy = (p.y - gest.p0.y) / V.s, b = gest.b0.slice(), h = gest.h, m = 24;
+      if (h.includes('w')) b[0] = clamp(gest.b0[0] + dx, 0, b[2] - m);
+      if (h.includes('e')) b[2] = clamp(gest.b0[2] + dx, b[0] + m, S.W);
+      if (h.includes('n')) b[1] = clamp(gest.b0[1] + dy, 0, b[3] - m);
+      if (h.includes('s')) b[3] = clamp(gest.b0[3] + dy, b[1] + m, S.H);
+      S.box = b; requestDraw();
+    }
+  });
+  function endPtr(e, cancel) {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.delete(e.pointerId);
+    if (!gest) return;
+    if (gest.kind === 'pinch') {
+      if (ptrs.size === 1) { const q = [...ptrs.values()][0]; gest = { kind: 'pan', p0: q, last: q, moved: true, hist: [{ x: q.x, y: q.y, t: now() }] }; }
+      else gest = null;
+      return;
+    }
+    if (gest.kind === 'pan' && !cancel) {
+      if (!gest.moved) onTap(gest.p0);
+      else { const h = gest.hist, a = h[0], b = h[h.length - 1], dt = b.t - a.t; if (dt > 0 && now() - b.t < 80) momentum((b.x - a.x) / dt, (b.y - a.y) / dt); }
+    }
+    if (ptrs.size === 0) { gest = null; vp.classList.remove('grabbing'); }
+  }
+  cv.addEventListener('pointerup', (e) => endPtr(e, false));
+  cv.addEventListener('pointercancel', (e) => endPtr(e, true));
+  cv.addEventListener('wheel', (e) => {
+    if (!S.img) return;
+    e.preventDefault(); stopAnim();
+    const p = local(e), d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX) < 0.5 || e.deltaMode !== 0) zoomAt(p.x, p.y, Math.exp(-d * (e.ctrlKey ? 0.01 : 0.0018)));
+    else { V.tx -= e.deltaX; V.ty -= e.deltaY; moved(); }
+  }, { passive: false });
+  // Safari: gesto di pinch del trackpad
+  let gs0 = 1;
+  vp.addEventListener('gesturestart', (e) => { e.preventDefault(); gs0 = 1; });
+  vp.addEventListener('gesturechange', (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, e.scale / gs0); gs0 = e.scale; });
+  vp.addEventListener('gestureend', (e) => e.preventDefault());
+  function onTap(p) {
+    const t = now(), dbl = t - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30;
+    lastTap = { t: dbl ? 0 : t, x: p.x, y: p.y };
+    if (dbl) {
+      const fit = fitTarget(S.ref && S.phase === 'result' ? S.ref : null);
+      if (V.s > fit.s * 2.5) springTo(fit);
+      else { const s = Math.min(60, V.s * 2.5), k = s / V.s; springTo({ s, tx: p.x - (p.x - V.tx) * k, ty: p.y - (p.y - V.ty) * k }); }
+      return;
+    }
+    if (S.edit) { const q = toImg(p); S.sel = hitTest(q.x, q.y, 14 / V.s); updateSel(); requestDraw(); }
+  }
+
+  /* ---------- modifica: selezione, elimina, cambia livello, annulla ---------- */
+  function setEdit(on) {
+    S.edit = !!on && S.paths.length > 0; if (!S.edit) S.sel = -1;
+    $('b-edit').setAttribute('aria-pressed', String(S.edit)); vp.classList.toggle('editing', S.edit); $('editbar').hidden = !S.edit; updateSel(); requestDraw();
+  }
+  function updateSel() {
+    const p = S.paths[S.sel];
+    const inf = $('sel-info'), narrow = window.innerWidth < 600;
+    inf.textContent = p ? (narrow ? LAYERS[p.l].label : LAYERS[p.l].label + ' · ' + (p.c ? 'chiusa' : 'aperta') + ' · ' + (p.v.length / 2) + ' vertici') : (narrow ? 'Tocca una linea' : 'Tocca una linea per selezionarla');
+    $('b-del').disabled = !p; $('b-layer').disabled = !p; $('b-undo').disabled = !S.undo.length;
+  }
+  function delSel() { if (S.sel < 0) return; const p = S.paths[S.sel]; S.undo.push({ t: 'del', i: S.sel, p }); S.paths.splice(S.sel, 1); S.sel = -1; rebuild(); updateSel(); }
+  function cycleLayer() { if (S.sel < 0) return; const p = S.paths[S.sel]; S.undo.push({ t: 'lay', i: S.sel, l: p.l }); p.l = (p.l + 1) % 4; rebuild(); updateSel(); say('Spostata in ' + LAYERS[p.l].label); }
+  function undo() { const u = S.undo.pop(); if (!u) return; if (u.t === 'del') { S.paths.splice(u.i, 0, u.p); S.sel = u.i; } else { S.paths[u.i].l = u.l; S.sel = u.i; } rebuild(); updateSel(); }
+
+  /* ---------- pannello: foglio con due posizioni su iPhone ---------- */
+  const panel = $('panel'), grab = $('grab'), pscroll = $('pscroll');
+  let sheetY = 0;
+  const isWide = () => window.innerWidth >= 900;
+  function sheetVisible() { if (isWide()) return 0; return grab.offsetHeight + $('step').offsetHeight + 18 + safeBottom(); }
+  const sabEl = document.createElement('div');
+  sabEl.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
+  document.body.appendChild(sabEl);
+  function safeBottom() { return parseFloat(getComputedStyle(sabEl).paddingBottom) || 0; }
+  function sheetLayout(animate) {
+    if (isWide()) { panel.style.removeProperty('height'); panel.style.setProperty('--sheet-y', '0px'); pscroll.style.overflowY = 'auto'; return; }
+    const H = vp.parentElement.clientHeight, full = Math.round(H * 0.86);
+    panel.style.height = full + 'px';
+    const peekY = Math.max(0, full - sheetVisible());
+    setSheetY(S.sheet === 'full' ? 0 : peekY, animate);
+    pscroll.style.overflowY = S.sheet === 'full' ? 'auto' : 'hidden';
+    document.documentElement.style.setProperty('--peek', Math.round(full - peekY) + 'px');
+  }
+  let sheetAnim = 0;
+  function setSheetY(y, animate) {
+    cancelAnimationFrame(sheetAnim);
+    if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { sheetY = y; panel.style.setProperty('--sheet-y', y + 'px'); return; }
+    let v = 0, x = sheetY, last = now(); const w = 2 * Math.PI / 0.32, z = 0.86;
+    const step = () => {
+      const t = now(), dt = Math.min(0.032, (t - last) / 1000); last = t;
+      const a = -w * w * (x - y) - 2 * z * w * v; v += a * dt; x += v * dt;
+      sheetY = x; panel.style.setProperty('--sheet-y', x.toFixed(2) + 'px');
+      if (Math.abs(x - y) > 0.4 || Math.abs(v) > 4) sheetAnim = requestAnimationFrame(step); else { sheetY = y; panel.style.setProperty('--sheet-y', y + 'px'); }
+    };
+    sheetAnim = requestAnimationFrame(step);
+  }
+  function setSheet(state) { if (S.sheet === state) { sheetLayout(true); return; } S.sheet = state; sheetLayout(true); }
+  (function sheetDrag() {
+    let d = null;
+    const down = (e) => {
+      if (isWide()) return;
+      d = { y0: e.clientY, s0: sheetY, hist: [{ y: e.clientY, t: now() }], moved: false };
+      e.currentTarget.setPointerCapture(e.pointerId); cancelAnimationFrame(sheetAnim);
+    };
+    const move = (e) => {
+      if (!d) return;
+      const dy = e.clientY - d.y0; if (Math.abs(dy) > 4) d.moved = true;
+      const full = panel.offsetHeight - sheetVisible(); let y = d.s0 + dy;
+      if (y < 0) y = -Math.pow(-y, 0.7); if (y > full) y = full + Math.pow(y - full, 0.7);
+      sheetY = y; panel.style.setProperty('--sheet-y', y + 'px');
+      d.hist.push({ y: e.clientY, t: now() }); if (d.hist.length > 5) d.hist.shift();
+    };
+    const up = () => {
+      if (!d) return;
+      const h = d.hist, a = h[0], b = h[h.length - 1], v = b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0;
+      if (!d.moved) { setSheet(S.sheet === 'full' ? 'peek' : 'full'); d = null; return; }
+      const proj = sheetY + v * 0.998 / (1 - 0.998), full = panel.offsetHeight - sheetVisible();
+      S.sheet = proj < full / 2 ? 'full' : 'peek'; d = null; sheetLayout(true);
+    };
+    grab.addEventListener('pointerdown', down); grab.addEventListener('pointermove', move); grab.addEventListener('pointerup', up); grab.addEventListener('pointercancel', up);
+  })();
+
+  /* ---------- schede del pannello ---------- */
+  function setPhase(ph) {
+    S.phase = ph;
+    document.body.classList.toggle('is-empty', ph === 'empty');
+    $('empty').hidden = ph !== 'empty';
+    $('b-edit').disabled = ph !== 'result';
+    if (ph !== 'result' && S.edit) setEdit(false);
+    if (ph === 'run' || ph === 'box') S.sheet = 'peek';
+    renderStep(); updateButtons(); requestDraw();
+    requestAnimationFrame(() => sheetLayout(true));
+  }
+  function renderStep() {
+    const el = $('step');
+    if (S.phase === 'empty') {
+      el.innerHTML = '<p class="title">Inizia da una foto</p><p class="sub">Una foto frontale dell\'edificio, il più possibile dritta. Il raddrizzamento e la scala li puoi fare poi nel CAD.</p><div class="actions"><button class="btn filled lg" data-act="pick">Scegli una foto</button></div>';
+    } else if (S.phase === 'box') {
+      el.innerHTML = '<p class="title">Inquadra l\'edificio</p><p class="sub">Trascina gli angoli del riquadro attorno alla facciata: ciò che resta fuori viene ignorato.</p>' +
+        '<div class="seg full" role="group" aria-label="Modalità">' + Object.keys(MODES).map((k) => '<button type="button" data-mode="' + k + '" aria-pressed="' + (S.mode === k) + '">' + MODES[k].label + '</button>').join('') + '</div>' +
+        '<p class="mode-desc">' + MODES[S.mode].desc + '</p><div class="actions"><button class="btn filled lg" data-act="convert">Converti</button></div>';
+    } else if (S.phase === 'run') {
+      el.innerHTML = '<p class="title" id="run-title">Conversione in corso</p><div class="progress"><i id="pbar"></i></div><div class="prog-row"><span id="pmsg"></span><span id="peta"></span></div><p class="meta">Puoi spostarti e ingrandire mentre lavora. Su iPhone tieni lo schermo acceso.</p><div class="actions"><button class="btn gray" data-act="stop">Interrompi</button></div>';
+      renderProgress();
+    } else if (S.phase === 'result') {
+      const inf = S.info || {}, shapes = S.paths.filter((p) => p.c).length;
+      el.innerHTML = '<p class="title">Disegno pronto</p><div class="summary"><div><b>' + fmtInt(inf.lines || 0) + '</b><span>linee</span></div><div><b>' + fmtInt(inf.arcs || 0) + '</b><span>archi</span></div><div><b>' + fmtInt(shapes) + '</b><span>forme chiuse</span></div></div>' +
+        '<div class="actions"><button class="btn filled" data-act="dxf">Esporta DXF</button><button class="btn gray" data-act="edit">Correggi</button></div>' +
+        '<p class="meta">' + MODES[S.mode].label + (S.timings.total ? ' · ' + fmtTime(S.timings.total) : '') + ' · <button class="btn plain sm" data-act="again" style="min-height:28px;padding:0 4px">Nuova conversione</button></p>';
+    }
+    requestAnimationFrame(() => sheetLayout(false));
+  }
+  function renderProgress() {
+    const bar = $('pbar'); if (!bar) return;
+    const p = S.prog || {}, stage = p.stage, sd = S.ai && S.ai.detail;
+    let frac = p.frac || 0;
+    if (S.mode !== 'classic') { if (stage === 'download') frac = 0.02; else if (stage === 'neural') frac = sd ? 0.02 + 0.33 * frac : 0.05 + 0.9 * frac; else if (stage === 'seg') frac = 0.35 + 0.62 * frac; }
+    bar.style.width = (100 * clamp(frac, 0, 1)).toFixed(1) + '%';
+    $('pmsg').textContent = p.msg || '';
+    $('peta').textContent = p.eta != null && p.eta > 2000 ? 'circa ' + fmtTime(p.eta) : '';
+    $('run-title').textContent = stage === 'download' ? 'Preparo i modelli' : stage === 'seg' ? 'Riconosco le forme' : 'Conversione in corso';
+  }
+  $('step').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.mode) { S.mode = b.dataset.mode; renderStep(); return; }
+    const a = b.dataset.act;
+    if (a === 'pick') $('file').click();
+    else if (a === 'convert') convert();
+    else if (a === 'stop') cancelRun(false);
+    else if (a === 'dxf') exportAs('dxf');
+    else if (a === 'edit') setEdit(true);
+    else if (a === 'again') { S.paths = []; S.ref = null; rebuild(); setPhase('box'); fitView(true, true); }
+  });
+
+  function renderLayers() {
+    const counts = [0, 0, 0, 0]; for (const p of S.paths) counts[p.l]++;
+    $('layers').innerHTML = LAYERS.map((L, i) => '<li><span class="sw" style="border-top-color:var(' + L.v + ');border-top-width:' + (i === 0 ? 3 : i === 1 ? 2 : 1.5) + 'px;' + (L.dash ? 'border-top-style:dashed' : '') + '"></span><span class="nm">' + L.label + '<small>' + L.desc + '</small></span><span class="ct">' + fmtInt(counts[i]) + '</span><label class="switch" aria-label="Mostra ' + L.label + '"><input type="checkbox" data-layer="' + i + '"' + (S.show[i] ? ' checked' : '') + '><span></span></label></li>').join('');
+  }
+  $('layers').addEventListener('change', (e) => { const i = e.target.dataset.layer; if (i == null) return; S.show[+i] = e.target.checked; if (S.sel >= 0 && !S.show[S.paths[S.sel].l]) S.sel = -1; renderStats(); requestDraw(); });
+
+  /* ---------- esportazione ---------- */
+  const vis = () => S.paths.filter((p) => S.show[p.l]);
+  function refRect() { return S.ref || [0, 0, S.W, S.H]; }
+  function mmPerPx() { const v = parseFloat($('wmm').value), r = refRect(); return (v > 0 ? v : 10000) / Math.max(1, r[2] - r[0]); }
+  function pathLenOf(p) {
+    const v = p.v, n = v.length / 2, m = p.c ? n : n - 1; let L = 0;
+    for (let i = 0; i < m; i++) { const j = (i + 1) % n, c = Math.hypot(v[2 * j] - v[2 * i], v[2 * j + 1] - v[2 * i + 1]), b = p.b[i]; if (!b) L += c; else { const th = 4 * Math.atan(Math.abs(b)); L += c / (2 * Math.sin(th / 2)) * th; } }
+    return L;
+  }
+  function renderStats() {
+    const r = refRect(), k = mmPerPx(), vp2 = vis(); let verts = 0, len = 0;
+    for (const p of vp2) { verts += p.v.length / 2; len += pathLenOf(p); }
+    const m = (mm) => (mm >= 1000 ? fmt1(mm / 1000) + ' m' : fmtInt(mm) + ' mm');
+    $('stats').innerHTML = S.paths.length ? '<dt>Dimensioni</dt><dd>' + m((r[2] - r[0]) * k) + ' × ' + m((r[3] - r[1]) * k) + '</dd><dt>Polilinee</dt><dd>' + fmtInt(vp2.length) + '</dd><dt>Vertici</dt><dd>' + fmtInt(verts) + '</dd><dt>Lunghezza linee</dt><dd>' + m(len * k) + '</dd>' : '';
+  }
+  function pathD(paths, fx, fy, rs) {
+    const f = (n) => String(+n.toFixed(3)), out = [];
+    for (const p of paths) {
+      const v = p.v, n = v.length / 2, m = p.c ? n : n - 1;
+      let d = 'M' + f(fx(v[0])) + ' ' + f(fy(v[1]));
+      for (let i = 0; i < m; i++) {
+        const j = (i + 1) % n, x = v[2 * j], y = v[2 * j + 1], b = p.b[i];
+        if (!b) d += 'L' + f(fx(x)) + ' ' + f(fy(y));
+        else { const c = Math.hypot(x - v[2 * i], y - v[2 * i + 1]), th = 4 * Math.atan(Math.abs(b)), r = c / (2 * Math.sin(th / 2)) * rs; d += 'A' + f(r) + ' ' + f(r) + ' 0 ' + (th > Math.PI ? 1 : 0) + ' ' + (b > 0 ? 0 : 1) + ' ' + f(fx(x)) + ' ' + f(fy(y)); }
+      }
+      out.push(d + (p.c ? 'Z' : ''));
+    }
+    return out.join('');
+  }
+  function buildSVG() {
+    const r = refRect(), k = mmPerPx(), w = (r[2] - r[0]) * k, h = (r[3] - r[1]) * k, ps = vis(), g = [];
+    for (let l = 0; l < 4; l++) {
+      const sel = ps.filter((p) => p.l === l); if (!sel.length) continue;
+      const L = LAYERS[l], sw = L.w;
+      g.push('<g id="' + L.name + '" fill="none" stroke="#000000" stroke-width="' + sw + '" stroke-linejoin="round" stroke-linecap="round"' + (L.dash ? ' stroke-dasharray="' + (sw * 8) + ' ' + (sw * 5) + '"' : '') + '>\n<path d="' + pathD(sel, (x) => (x - r[0]) * k, (y) => (y - r[1]) * k, k) + '"/>\n</g>');
+    }
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + w.toFixed(3) + 'mm" height="' + h.toFixed(3) + 'mm" viewBox="0 0 ' + w.toFixed(3) + ' ' + h.toFixed(3) + '">\n' + g.join('\n') + '\n</svg>\n';
+  }
+  /* DXF R12: un layer per livello (colori e tipi di linea), LINE per i tratti singoli, POLYLINE con bulge per catene e archi */
+  function buildDXF() {
+    const r = refRect(), k = mmPerPx();
+    const o = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$INSUNITS', '70', '4', '9', '$LTSCALE', '40', '1.0', '0', 'ENDSEC',
+      '0', 'SECTION', '2', 'TABLES',
+      '0', 'TABLE', '2', 'LTYPE', '70', '2',
+      '0', 'LTYPE', '2', 'CONTINUOUS', '70', '0', '3', 'Continua', '72', '65', '73', '0', '40', '0.0',
+      '0', 'LTYPE', '2', 'DASHED', '70', '0', '3', 'Tratteggio __ __', '72', '65', '73', '2', '40', String(Math.max(6, (r[2] - r[0]) * k / 150).toFixed(2)), '49', String(Math.max(4, (r[2] - r[0]) * k / 225).toFixed(2)), '49', String(-Math.max(2, (r[2] - r[0]) * k / 450).toFixed(2)),
+      '0', 'ENDTAB',
+      '0', 'TABLE', '2', 'LAYER', '70', '5', '0', 'LAYER', '2', '0', '70', '0', '62', '7', '6', 'CONTINUOUS'];
+    for (const L of LAYERS) o.push('0', 'LAYER', '2', L.name, '70', '0', '62', String(L.aci), '6', L.dash ? 'DASHED' : 'CONTINUOUS');
+    o.push('0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES');
+    const X = (x) => ((x - r[0]) * k).toFixed(3), Y = (y) => ((r[3] - y) * k).toFixed(3);
+    for (const p of vis()) {
+      const v = p.v, n = v.length / 2, ly = LAYERS[p.l].name;
+      if (!p.c && n === 2 && !p.b[0]) { o.push('0', 'LINE', '8', ly, '10', X(v[0]), '20', Y(v[1]), '30', '0.0', '11', X(v[2]), '21', Y(v[3]), '31', '0.0'); continue; }
+      o.push('0', 'POLYLINE', '8', ly, '66', '1', '10', '0.0', '20', '0.0', '30', '0.0', '70', p.c ? '1' : '0');
+      for (let i = 0; i < n; i++) { o.push('0', 'VERTEX', '8', ly, '10', X(v[2 * i]), '20', Y(v[2 * i + 1]), '30', '0.0'); if (i < p.b.length && p.b[i]) o.push('42', p.b[i].toFixed(6)); }
+      o.push('0', 'SEQEND', '8', ly);
+    }
+    o.push('0', 'ENDSEC', '0', 'EOF');
+    return o.join('\n') + '\n';
+  }
+  function arcBezier(P, Q, b) {
+    const a = arcCenter(P, Q, b), th = 4 * Math.atan(Math.abs(b)), r = a.r;
+    let ang = Math.atan2(P[1] - a.cy, P[0] - a.cx);
+    const delta = (b > 0 ? -1 : 1) * th, pieces = Math.ceil(Math.abs(delta) / (Math.PI / 2)), phi = delta / pieces, kk = 4 / 3 * Math.tan(phi / 4), out = [];
+    for (let i = 0; i < pieces; i++) {
+      const a1 = ang + phi, p0x = a.cx + r * Math.cos(ang), p0y = a.cy + r * Math.sin(ang), p3x = a.cx + r * Math.cos(a1), p3y = a.cy + r * Math.sin(a1);
+      out.push([p0x - kk * r * Math.sin(ang), p0y + kk * r * Math.cos(ang), p3x + kk * r * Math.sin(a1), p3y - kk * r * Math.cos(a1), p3x, p3y]);
+      ang = a1;
+    }
+    return out;
+  }
+  function buildPDF() {
+    const r = refRect(), pt = 72 / 25.4, k = mmPerPx(), maxSide = 1180;
+    let sc = k * pt; const w0 = (r[2] - r[0]) * sc, h0 = (r[3] - r[1]) * sc; const fitK = Math.min(1, maxSide / Math.max(w0, h0)); sc *= fitK;
+    const pw = (r[2] - r[0]) * sc + 40, ph = (r[3] - r[1]) * sc + 40;
+    const X = (x) => (20 + (x - r[0]) * sc).toFixed(2), Y = (y) => (20 + (r[3] - y) * sc).toFixed(2), c = ['1 J 1 j 0 0 0 RG'];
+    for (let l = 3; l >= 0; l--) {
+      const L = LAYERS[l]; c.push(Math.max(0.2, L.w * pt * Math.max(0.35, fitK)).toFixed(2) + ' w', L.dash ? '[4 2.5] 0 d' : '[] 0 d');
+      for (const p of vis()) {
+        if (p.l !== l) continue;
+        const v = p.v, n = v.length / 2, m = p.c ? n : n - 1, parts = [X(v[0]) + ' ' + Y(v[1]) + ' m'];
+        for (let i = 0; i < m; i++) {
+          const j = (i + 1) % n, b = p.b[i];
+          if (!b) parts.push(X(v[2 * j]) + ' ' + Y(v[2 * j + 1]) + ' l');
+          else for (const z of arcBezier([v[2 * i], v[2 * i + 1]], [v[2 * j], v[2 * j + 1]], b)) parts.push(X(z[0]) + ' ' + Y(z[1]) + ' ' + X(z[2]) + ' ' + Y(z[3]) + ' ' + X(z[4]) + ' ' + Y(z[5]) + ' c');
+        }
+        parts.push(p.c ? 'h S' : 'S'); c.push(parts.join('\n'));
+      }
+    }
+    const cs = c.join('\n') + '\n';
+    const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw.toFixed(2) + ' ' + ph.toFixed(2) + '] /Contents 4 0 R /Resources << >> >>', '<< /Length ' + cs.length + ' >>\nstream\n' + cs + 'endstream'];
+    let out = '%PDF-1.4\n'; const offs = [];
+    objs.forEach((ob, i) => { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + ob + '\nendobj\n'; });
+    const xr = out.length;
+    out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + offs.map((x) => String(x).padStart(10, '0') + ' 00000 n \n').join('') + 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xr + '\n%%EOF';
+    return out;
+  }
+  const baseName = () => (S.name || 'disegno').replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '_') || 'disegno';
+  async function saveFile(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    let dl = null;
+    try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); say('Salvato: ' + filename); return; }
+      catch (e) {
+        if (e && e.code === 'declined') { say('Salvataggio annullato.'); return; }
+        if (e && e.code === 'rejected_extension' && filename.endsWith('.dxf')) { try { await dl.save({ filename: filename + '.txt', data: blob }); say('Salvato come .dxf.txt: rinominalo in .dxf.'); return; } catch (e2) { /* sotto */ } }
+      }
+    }
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    say('Esportato: ' + filename);
+  }
+  function exportAs(kind) {
+    if (!S.paths.length) return;
+    if (kind === 'dxf') saveFile(baseName() + '.dxf', buildDXF(), 'application/dxf');
+    else if (kind === 'svg') saveFile(baseName() + '.svg', buildSVG(), 'image/svg+xml');
+    else if (kind === 'pdf') saveFile(baseName() + '.pdf', buildPDF(), 'application/pdf');
+  }
+  async function copyDXF() {
+    const t = buildDXF();
+    try { await navigator.clipboard.writeText(t); say('DXF copiato: incollalo in un file .dxf.'); } catch (e) { say('Il browser non permette di copiare: usa il pulsante DXF.'); }
+  }
+  function updateButtons() {
+    const has = S.paths.length > 0;
+    $('sec-layers').hidden = !has; $('sec-export').hidden = !has;
+    for (const id of ['ex-dxf', 'ex-svg', 'ex-pdf', 'ex-copy', 'b-export']) $(id).disabled = !has;
+    $('b-undo').disabled = !S.undo.length;
+    const t = S.timings || {}, ai = t.ai || {};
+    $('perf').textContent = (S.phase === 'result' ? ['Motore AI: ' + AIW.mode, 'motore geometrico: ' + Eng.mode, t.neural ? 'disegno neurale ' + fmtTime(ai.neural || t.neural) : '', ai.seg ? 'forme ' + fmtTime(ai.seg) + ' (' + fmtInt(t.decodes || 0) + ' prove)' : '', t.vec ? 'vettorizzazione ' + fmtTime(t.vec) : '', performance.memory ? 'memoria JS ' + Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : ''].filter(Boolean).join(' · ') : 'Disponibili dopo una conversione.');
+  }
+
+  /* ---------- collegamenti ---------- */
+  $('b-open').onclick = () => $('file').click();
+  $('b-pick').onclick = () => $('file').click();
+  $('b-sample').onclick = makeSample;
+  $('file').onchange = (e) => { loadFile(e.target.files[0]); e.target.value = ''; };
+  $('b-export').onclick = () => {
+    if (isWide()) { $('sec-export').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    S.sheet = 'full'; sheetLayout(true); setTimeout(() => { pscroll.scrollTo({ top: $('sec-export').offsetTop - 8, behavior: 'smooth' }); }, 120);
+  };
+  $('ex-dxf').onclick = () => exportAs('dxf'); $('ex-svg').onclick = () => exportAs('svg'); $('ex-pdf').onclick = () => exportAs('pdf'); $('ex-copy').onclick = copyDXF;
+  $('wmm').addEventListener('input', renderStats);
+  $('b-fit').onclick = () => fitView(true);
+  $('b-zin').onclick = () => { const t = { s: Math.min(60, V.s * 1.6) }; t.tx = VW / 2 - (VW / 2 - V.tx) * t.s / V.s; t.ty = VH / 2 - (VH / 2 - V.ty) * t.s / V.s; springTo(t); };
+  $('b-zout').onclick = () => { const t = { s: Math.max(minScale(), V.s / 1.6) }; t.tx = VW / 2 - (VW / 2 - V.tx) * t.s / V.s; t.ty = VH / 2 - (VH / 2 - V.ty) * t.s / V.s; springTo(t); };
+  $('b-edit').onclick = () => setEdit(!S.edit);
+  $('b-del').onclick = delSel; $('b-layer').onclick = cycleLayer; $('b-undo').onclick = undo;
+  $('seg-view').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.view; for (const x of $('seg-view').children) x.setAttribute('aria-pressed', String(x === b)); requestDraw(); });
+  $('seg-classic').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return; S.classic = b.dataset.cmode;
+    for (const x of $('seg-classic').children) x.setAttribute('aria-pressed', String(x === b));
+    const d = DEF[S.classic]; for (const k of ['sens', 'blur', 'simp', 'minlen', 'merge']) if (d[k] !== undefined) $(k).value = d[k]; $('straight').checked = d.straight;
+    updateLabels(); liveClassic();
+  });
+  function liveClassic() { if (S.mode === 'classic' && S.phase === 'result') { clearTimeout(classicT); classicT = setTimeout(() => runClassic(false), 180); } }
+  for (const id of ['sens', 'blur', 'simp', 'minlen', 'merge', 'thr', 'arcs', 'straight', 'auto', 'inv', 'autoall']) $(id).addEventListener('input', () => { updateLabels(); liveClassic(); });
+  let thrT = 0;
+  $('ai-thr').addEventListener('input', () => { updateLabels(); if (S.ai && S.ai.neural && S.phase === 'result') { clearTimeout(thrT); thrT = setTimeout(() => vectorize(true), 250); } });
+  // trascina e incolla
+  let dragN = 0;
+  window.addEventListener('dragenter', (e) => { if ([...(e.dataTransfer && e.dataTransfer.types || [])].includes('Files')) { dragN++; $('drop').hidden = false; e.preventDefault(); } });
+  window.addEventListener('dragleave', () => { dragN = Math.max(0, dragN - 1); if (!dragN) $('drop').hidden = true; });
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => { e.preventDefault(); dragN = 0; $('drop').hidden = true; const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) loadFile(f); });
+  window.addEventListener('paste', (e) => { for (const it of (e.clipboardData && e.clipboardData.items) || []) if (it.type.startsWith('image/')) { loadFile(it.getAsFile()); e.preventDefault(); return; } });
+  // tastiera (desktop)
+  window.addEventListener('keydown', (e) => {
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); $('file').click(); }
+    else if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); exportAs('dxf'); }
+    else if (!mod && (e.key === 'Delete' || e.key === 'Backspace') && S.edit) { e.preventDefault(); delSel(); }
+    else if (!mod && e.key === 'f') fitView(true);
+    else if (!mod && e.key === 'm' && S.phase === 'result') setEdit(!S.edit);
+    else if (!mod && (e.key === '+' || e.key === '=')) $('b-zin').click();
+    else if (!mod && e.key === '-') $('b-zout').click();
+    else if (!mod && e.key === 'Escape') { if (S.phase === 'run') cancelRun(false); else if (S.edit) setEdit(false); }
+    else if (!mod && e.key === 'Enter' && S.phase === 'box') convert();
+  });
+  new ResizeObserver(() => { resize(); sheetLayout(false); }).observe(vp);
+  window.addEventListener('resize', () => sheetLayout(false));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) requestDraw(); });
+
+  readColors(); updateLabels(); resize(); setPhase('empty');
+  window.__fv = { S, V, Eng, AIW, rebuild, buildDXF, buildSVG, buildPDF, fitView, setPhase, convert };
+
+})();
+</script>
+</body>
+</html>
