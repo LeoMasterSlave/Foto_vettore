@@ -725,6 +725,8 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
     os.makedirs(D, exist_ok=True)
     tempi = {}
     rgb = carica_foto(foto)
+    if box == 'tutta':  # foto gia' ritagliata sul prospetto
+        box = [0, 0, rgb.shape[1], rgb.shape[0]]
     if box is None:
         box = rileva_riquadro(rgb)
         log('Riquadro automatico (motore Fotovettore):', box)
