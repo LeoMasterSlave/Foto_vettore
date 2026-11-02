@@ -615,3 +615,13 @@ Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.h
   - `mosaico`: clustering watershed + cutout sul disegno; si tengono le regioni chiare.
 - **Scoperto e corretto in prova**: il motore (`regShape`) vuole contorni densi. Con i soli vertici dei poligoni dava 25 celle chiuse invece di 222; ora c'è `ricampiona()` a 1 px.
 - Verificato qui **solo con un VTracer finto** (contorni OpenCV codificati come l'SVG compatto di VTracer: comandi relativi, H/V, numeri ".5-3"). Questo verifica il lettore SVG (`_path_poligoni`, testato anche su curve C/S/Q/T) e il collegamento al motore. **Non dice nulla sulla qualità del VTracer vero**: va eseguito su Colab.
+
+### 15.13 VTracer vero su Colab (2/11/2026): non adottato
+
+- Esecuzione dell'utente su due foto della chiesetta **non ritagliate** (facciata e fianco da WhatsApp, `RIQUADRO = tutta`, quindi con terreno, alberi e ramo; regione a 900 px, edificio largo circa 450–850 px). VTracer 1.0.0a4 installato e funzionante, meno di 1 s per variante.
+- Facciata, DXF: SDXL + SAM ha completezza 0,74 e linee inventate 1,4%; VTracer celle 0,84 e 12%; VTracer mosaico 0,83 e 5,5%. Le misure sono falsate da terreno e alberi.
+- **A vista entrambe le varianti VTracer sono peggiori di SDXL + SAM**: celle fuse in grandi poligoni frastagliati, archetti deformati. Sul fianco, a piccole bozze, sono quasi solo macchie irregolari. È lo stesso difetto delle "celle del disegno" (15.8): il tratto SDXL ha piccoli varchi, quindi celle vicine si fondono, e un vettorizzatore di regioni non può rimediare.
+- Conclusione: VTracer non risolve il problema; resta nel banco come variante. **SDXL + SAM resta il migliore e il più pulito.** Il lavoro utile è sul motore:
+  1. chiudere i varchi del tratto prima di estrarre le celle;
+  2. accettare solo le celle regolari (rettangolo o arco riconosciuti da `regShape`) dove SAM non ha già una forma.
+- Per i prossimi test servono foto **ritagliate sul prospetto** (meglio i raddrizzamenti RDF). Per il fianco a piccole bozze serve probabilmente più risoluzione della regione a 900 px (`LATO_MOTORE`).
