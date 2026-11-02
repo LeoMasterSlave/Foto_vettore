@@ -1,0 +1,418 @@
+# Fotovettore: documento di passaggio
+
+Stato al 2 novembre 2026. Questo documento permette di riprendere il progetto in una nuova conversazione senza rispiegare nulla. Distingue sempre ciò che è stato **verificato** (eseguito e misurato) da ciò che è **ipotesi** o **non verificato**.
+
+Repository: `https://github.com/LeoMastersSlave/Foto_vettore` (in alcune risposte di GitHub compare anche la grafia `LeoMasterSlave/foto_vettore`: GitHub ha segnalato che il repository è stato spostato su `LeoMastersSlave/Foto_vettore`).
+Sito GitHub Pages: `https://leomastersslave.github.io/Foto_vettore/` (versione pubblicata), `…/Foto_vettore/dev/` (versione di sviluppo), `…/Foto_vettore/prova-ai/` (pagina di prova dei modelli).
+
+---
+
+## 1. Obiettivo del progetto
+
+Fotovettore è una web app gratuita che converte la **foto di un edificio** in un **disegno CAD vettoriale** (DXF, SVG, PDF). È ispirata a PhotoCAD (`https://photocad.ai/convert`), servizio a pagamento che produce disegni puliti e coerenti.
+
+Requisiti fissati dall'utente (Leonardo, studente di architettura):
+
+- qualità del disegno prima di tutto: contorni continui, conci, archi, bifore, cornici riconoscibili; gerarchia di linee come in un vero disegno CAD;
+- gratuito, open source, eseguibile **in locale nel browser**; nessun abbonamento o API commerciale senza consenso esplicito;
+- deve funzionare su **iPhone (Safari)** e su desktop;
+- la scala reale non serve: l'utente raddrizza le foto (fotoraddrizzamento) e scala nel CAD;
+- impostazioni avanzate nascoste, modalità automatica consigliata;
+- flusso semplice: carico la foto → confermo l'edificio → converto → vedo il risultato → correggo → esporto DXF;
+- non riscrivere da zero, non compromettere la versione pubblicata; sviluppo in una versione separata;
+- non dichiarare test non eseguiti, non inventare capacità o geometrie.
+
+Traguardo rispetto a PhotoCAD: avvicinarsi alla sua pulizia (ogni concio come contorno chiuso, archi e aperture completi, poco rumore) restando gratuiti e locali.
+
+---
+
+## 2. Stato attuale in breve
+
+| Versione | Dove | Cosa fa | Stato |
+|---|---|---|---|
+| Pubblicata (v3, classica) | `index.html` | Metodo geometrico senza AI (Canny + bordi multi-scala, livelli STRUTTURA/ELEMENTI/CONCI, DXF R12 con layer) | Online, invariata. Qualità giudicata dall'utente "mediocre e inutilizzabile" sulle murature. |
+| Pagina di prova AI | `prova-ai/index.html` | Esegue i due modelli AI e mostra i risultati grezzi (nessun DXF) | **Verificata dall'utente su iPhone** (tempi nella sezione 8). |
+| Sviluppo (v4) | `dev/index.html` | App completa: AI integrata (modalità Dettagliata, Rapida, Classica), nuova interfaccia, correzione, DXF a 4 livelli | Pubblicata il 2/11/2026. **Testata solo in Chromium automatico**; non ancora provata dall'utente su iPhone. |
+| Sorgenti e strumenti | `sviluppo/` | Sorgenti separati di `dev/index.html`, script di build e di test | Aggiunti il 2/11/2026. |
+
+Il prossimo passo atteso è che l'utente apra `…/Foto_vettore/dev/` su iPhone e mandi la riga "Prestazioni" che si trova in "Impostazioni avanzate".
+
+---
+
+## 3. Organizzazione del repository
+
+```
+index.html                 versione pubblicata (v3 classica) - NON MODIFICARE senza accordo
+README.md, LICENSE         README del progetto, licenza MIT (autore indicato: Leonardo)
+prova-ai/
+  index.html               pagina di prova dei modelli (ONNX Runtime Web da jsDelivr)
+  README.md                crediti e licenze dei modelli
+  modelli/                 pesi ONNX usati anche da dev/ (circa 60 MB in totale)
+    contour_style_512x512.onnx   Informative Drawings, stile "contour" (17,1 MB)
+    mobilesam-encoder.onnx       MobileSAM encoder (26,7 MB)
+    mobilesam-decoder.onnx       MobileSAM decoder (15,7 MB)
+dev/
+  index.html               versione di sviluppo ASSEMBLATA (non modificare a mano: si rigenera)
+sviluppo/
+  build.py                 assembla dev/index.html dai sorgenti
+  src/engine.js            motore geometrico: metodo classico + vettorizzazione AI + riquadro automatico
+  src/ai_worker.js         motore AI: Informative Drawings + MobileSAM (Web Worker)
+  src/main.js              interfaccia, disegno su canvas, gesti, flusso, esportazioni
+  src/style.css            stile (token chiaro/scuro, layout iPhone/desktop)
+  src/body.html            markup dell'interfaccia
+  strumenti/               script di test e misura (sezione 11)
+  .gitignore               esclude strumenti/dati/ e .check.js
+FOTOVETTORE_HANDOFF.md     questo documento
+```
+
+`dev/` carica i modelli da `../prova-ai/modelli/`. Se si sposta la cartella dei modelli, cambiare `MODEL_BASE` in `sviluppo/src/main.js` (oppure usare il parametro `?models=` nell'indirizzo).
+
+---
+
+## 4. Architettura del codice (versione di sviluppo)
+
+`dev/index.html` è un solo file HTML. `sviluppo/build.py` concatena, dentro un'unica funzione autoeseguita: `engine.js` (definisce `makeEngine`), `ai_worker.js` (definisce `makeAI`), `main.js` (interfaccia). CSS e markup sono inseriti nella pagina. Nessuna libreria esterna tranne ONNX Runtime Web, caricato da jsDelivr solo quando serve l'AI.
+
+### 4.1 Tre processi
+
+1. **Thread principale** (`main.js`): interfaccia, canvas, gesti, esportazioni. Non esegue calcoli pesanti.
+2. **Worker geometrico**: creato da `makeEngine.toString()` in un Blob. Messaggi: `img` (immagine in grigio), `run` (metodo classico o vettorizzazione AI), `detect` (riquadro automatico). Se il worker non parte, `Eng` ripiega su `makeEngine()` nel thread principale.
+3. **Worker AI**: creato da `makeAI.toString()` + `importScripts(ort.min.js)`. Messaggi in ingresso: `ping`, `run {id, rgba, W, H, detail, base}`, `cancel`, `free`. Uscita: `prog`, `neural`, `polys`, `done`, `cancelled`, `error`. Ripieghi: se `importScripts` fallisce o il ping non risponde entro 25 s, oppure se la creazione della sessione ONNX fallisce dentro il worker (`error` con `init: true`), l'app carica ONNX Runtime nel thread principale e riesegue (`AIW.toMain()`).
+
+### 4.2 File e funzioni principali
+
+`sviluppo/src/engine.js` (1451 righe)
+- Metodo classico (eredità v1–v3): `gaussBlur`, `canny`, `traceChains`, `bridge`, `smoothPts`, `arcFit`, `fitChain` (linee e archi), `mergeLines`, `straighten`, `weld`, `tSnap`, `buildPaths`, `runOld` (modi Contorni/Sagoma), `runArch` (modo Architettura multi-scala con `subjectMask`, `openAxis`, `extendToMeet`).
+- Vettorizzazione AI: `thinZS` (scheletro Zhang-Suen), `pruneSpurs`, `dropSmallComp`, `traceSkeleton` (grafo dello scheletro), `circleFit` (Kåsa), `regShape` (riconosce cerchio, arco, rettangolo, poligono), `loopPath`, `bridgeFree`, `runAI`.
+- `detect()`: riquadro automatico dell'edificio.
+- Formato dei percorsi: `{c: 0|1 chiuso, v: [x,y,…], b: [bulge per segmento], l: livello 0..3}`. Bulge > 0 = arco visivamente antiorario nelle coordinate immagine (y in giù); nel DXF le y sono ribaltate e il bulge resta con lo stesso segno (verificato rileggendo il DXF, sezione 8.4).
+
+`sviluppo/src/ai_worker.js` (237 righe): `loadModel` (fetch con avanzamento e Cache Storage `fotovettore-modelli-v1`), `session`, `sampleTile` (ricampionamento bilineare in JS, senza OffscreenCanvas), `neuralMap`, `cellPrompts`, `traceMask` (contorno di Moore sulla maschera 256×256), `segment`, `run`.
+
+`sviluppo/src/main.js` (843 righe): stato `S`, `Eng`, `AIW`, `loadFile`/`setSource`, `makeSample`, `convert`, `onAI`, `vectorize`, `runClassic`, `cancelRun`, `rebuild` (Path2D per livello e indice di selezione), `draw`, `moved` (trasformazione CSS durante i gesti), `fitView`/`springTo`/`momentum`/`zoomAt`, gestione puntatori (trascina, pizzica, doppio tocco, rotella, pinch del trackpad Safari), modifica (`setEdit`, `delSel`, `cycleLayer`, `undo`), foglio inferiore (`sheetLayout`, `setSheetY` con molla), `renderStep`, `renderLayers`, esportazioni (`buildSVG`, `buildDXF`, `buildPDF`, `saveFile`), scorciatoie da tastiera. Per i test espone `window.__fv`.
+
+---
+
+## 5. Modelli AI
+
+| Modello | Uso | Licenza | Provenienza dei pesi | Formato | Dimensione | SHA-256 |
+|---|---|---|---|---|---|---|
+| Informative Drawings, stile "contour" (Chan, Durand, Isola) | Disegno a linee dalla foto | MIT (progetto originale `carolineec/informative-drawings`; conversione ONNX MIT di Kazuhito Takahashi) | `github.com/Kazuhito00/Informative-Drawings-ONNX-Sample`, file `model/contour_style_512x512.onnx` (clonato da GitHub) | ONNX, ingresso fisso 1×3×512×512 float 0–255 RGB, uscita 1×1×512×512 in 0–1 (1 = bianco); nomi `input_image` → `output_image` | 17,1 MB | `c3385588…953e` |
+| MobileSAM encoder | Embedding immagine per la segmentazione | Apache-2.0 (MobileSAM, `ChaoningZhang/MobileSAM`) | Release GitHub `palavido-dev/gratis-gis` tag `models-mobilesam-v1` (hash confrontati con `SHA256SUMS.txt` della release) | ONNX, ingresso 1×3×1024×1024 normalizzato (media 123.675/116.28/103.53, dev. std. 58.395/57.12/57.375), uscita 1×256×64×64 | 26,7 MB | `d02f3fe0…6cdf` |
+| MobileSAM decoder | Maschera da un punto di prompt | Apache-2.0 | Stessa release | Ingressi: `image_embeddings`, `point_coords` [1,N,2] in coordinate 1024, `point_labels`, `mask_input` 1×1×256×256, `has_mask_input`, `orig_im_size`; uscite `masks`, `iou_predictions`, `low_res_masks` (256×256) | 15,7 MB | `b748cd34…30a5` |
+
+Note:
+- La licenza MIT dei pesi originali di Informative Drawings è riportata dalle pagine consultate (webai.show e repository di esempio). Il repository originale non è stato aperto direttamente perché non era raggiungibile dall'ambiente di lavoro.
+- Il repository contiene anche gli stili `opensketch` e `anime`, provati e scartati: tratto più morbido e sfumato, meno adatto al CAD.
+- Esecuzione: ONNX Runtime Web 1.21.0 da `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js`, backend WASM, `numThreads = 1`. GitHub Pages non permette di impostare le intestazioni COOP/COEP, quindi niente multithreading.
+- Funziona solo da GitHub Pages o da un server: l'artifact dentro Claude non può scaricare i modelli. La prima esecuzione richiede internet (CDN e modelli); i modelli restano poi nella Cache Storage del browser.
+
+---
+
+## 6. Pipeline completa dalla foto al DXF (versione dev)
+
+1. **Caricamento** (`setSource`): l'immagine viene copiata su un canvas sorgente con lato lungo massimo 2400 px (per l'AI) e su un'immagine di lavoro con lato lungo massimo 1600 px (per la vista e per il metodo classico). Si calcola il grigio Float32 e lo si invia al worker geometrico.
+2. **Riquadro automatico** (`detect`): sobel sul grigio sfocato; si tengono i pixel con gradiente sopra l'80° percentile; i bordi sono classificati verticali o orizzontali (rapporto > 2); si contano solo le **corse lunghe** (≥ circa lato/110 px) in celle 16×16; si sfoca, si soglia al 28% del massimo e si prende la componente più forte; poi si affina con i profili di colonne e righe (soglia 30%) e si aggiunge un margine del 2,5%. L'utente corregge il riquadro trascinando angoli e lati.
+3. **Regione di lavoro** (`convert`): il riquadro viene ritagliato dal canvas sorgente e portato a lato lungo 900 px (700/900/1200 nelle impostazioni avanzate; ingrandimento massimo ×2). Si ricava il grigio della regione (per classificare le aperture).
+4. **Disegno neurale** (`neuralMap`): riquadri di T = 360 px con passo 0,7·T, ricampionati a 512, modello "contour", uscita riportata a T×T e fusa con finestra di Hann. Risultato: mappa in cui 0 = linea e 1 = bianco.
+5. **Anteprima progressiva**: appena c'è il disegno neurale, il worker geometrico produce un primo DXF solo neurale (mostrato in modalità Dettagliata mentre continua la segmentazione; in modalità Rapida è il risultato finale).
+6. **Segmentazione** (`segment`, solo modalità Dettagliata):
+   - punti di prompt: centri delle celle chiuse del disegno neurale (`cellPrompts`, trasformata di distanza e punto più interno di ogni cella) più una griglia di 14×14 punti per riquadro (12×12 nel passaggio largo);
+   - **passaggio largo**: tutta la regione come un unico riquadro (cattura portali e aperture grandi);
+   - **riquadri fini**: T = 360 px con passo 0,75·T;
+   - un punto viene saltato se è già coperto da una forma accettata, se è vicino a un punto già provato o se cade su una linea del disegno neurale;
+   - una maschera viene accettata se ha IoU stimata ≥ 0,75, area entro i limiti, non tocca i bordi del riquadro e non è coperta oltre il 60% da forme già trovate;
+   - il contorno della maschera 256×256 diventa un poligono in coordinate di regione.
+7. **Vettorizzazione AI** (`runAI` nel worker geometrico):
+   - Forme: `regShape` riconosce **cerchi** (riempimento 0,72–0,84, errore radiale basso), **aperture ad arco** a tutto sesto o ribassate (profilo stretto in alto, cerchio sulla parte superiore con raggio compatibile), **rettangoli** (riempimento > 0,84, lati dalla mediana dei punti) oppure **poligoni** (linee e archi con `fitChain`, raddrizzati entro 8°). La tolleranza cresce con la risoluzione della maschera. La forma regolare viene accettata solo se la deviazione al 90° percentile resta entro `max(3·tol, 5% del lato minore)`.
+   - Livelli delle forme: ELEMENTI se arco, cerchio, molto grande (≥ 5 volte la mediana oppure ≥ 1,2% della regione) o apertura (interno più scuro del 45% rispetto alla mediana); altrimenti DETTAGLI. Le forme regolarizzate con deviazione vicina al limite vanno in **RICOSTRUZIONI** (tratteggiato: "stimato").
+   - Linee neurali: soglia (sensibilità regolabile, predefinita 0,5); chiusura morfologica; riempimento delle celle minuscole (< 200 px a 900 px, cioè la grana della pietra); scheletro Zhang-Suen; potatura dei rami corti; eliminazione delle componenti piccole; grafo dello scheletro; catene lunghe quasi diritte → una linea sola; altrimenti `fitChain`; si scartano le linee dentro le forme (interno eroso) e quelle già descritte dai contorni delle forme; unione delle collineari (con distanza maggiore per orizzontali e verticali); raddrizzamento entro 4°.
+   - Livelli delle linee: STRUTTURA se la lunghezza è ≥ max(80 px, 16% del lato minore); altrimenti DETTAGLI. I tratti aperti di DETTAGLI sotto 24 px vengono scartati (rumore). Solo le linee di STRUTTURA possono essere prolungate fino a una linea vicina, e i tratti aggiunti finiscono in RICOSTRUZIONI.
+   - Le saldature dei vertici usano `weld`/`tSnap`/`buildPaths` del metodo classico. Le coordinate tornano a quelle dell'immagine.
+8. **Esportazione**: si usa la scala "Larghezza reale" (mm) della zona convertita (predefinita 10 000 mm).
+   - **DXF R12**: `$INSUNITS` = 4 (mm); tabella LTYPE CONTINUOUS e DASHED; layer STRUTTURA (colore 7), ELEMENTI (5), DETTAGLI (8), RICOSTRUZIONI (30, DASHED); entità LINE per i tratti singoli e POLYLINE/VERTEX con bulge per catene e archi; y ribaltata.
+   - **SVG**: un gruppo per livello, spessori 0,5/0,35/0,18/0,25 mm, tratteggio per le ricostruzioni.
+   - **PDF**: curve di Bézier per gli archi, pagina limitata a circa 1180 pt.
+   - Si esportano solo i livelli visibili.
+9. **Correzione**: modalità Modifica: tocca una linea per selezionarla; puoi eliminarla, spostarla al livello successivo o annullare; su desktop funzionano Canc/Backspace e ⌘Z.
+
+Modalità **Classica**: `runArch`/`runOld` sull'intera immagine, con i cursori delle impostazioni avanzate applicati dal vivo.
+
+---
+
+## 7. Interfaccia (versione dev)
+
+Progettata seguendo la skill MIT di Emil Kowalski `apple-design` (gesti 1:1, molle senza rimbalzi, inerzia, trasparenze solo sulle barre fluttuanti, opzioni per movimento e trasparenza ridotti). La skill di dickwu `apple-design-skill` è stata usata solo come lista di controllo (contiene testo delle Apple HIG senza file di licenza, quindi non è stata installata). All'utente è stata proposta una versione ridotta della skill di Emil come "apple-fluid-web-design".
+
+- **iPhone (< 900 px)**: barra superiore (Apri, Esporta); canvas a tutto schermo; in alto il selettore Disegno/Foto/Insieme; a destra i pulsanti tondi Adatta, +, −, Modifica; pannello come foglio in basso con due posizioni (maniglia trascinabile con proiezione della velocità).
+- **Desktop (≥ 900 px)**: barra laterale di 360 px con le stesse sezioni.
+- Schede del pannello: passo corrente (Inizia, Inquadra l'edificio con scelta della modalità, Conversione in corso con avanzamento, tempo stimato e "Interrompi", Disegno pronto con riepilogo ed "Esporta DXF"); Livelli (interruttori e conteggi); Esporta (larghezza reale, DXF/SVG/PDF, copia del DXF, statistiche); Impostazioni avanzate (risoluzione AI, sensibilità delle linee con rivettorizzazione immediata senza rieseguire i modelli, parametri del metodo classico, riga "Prestazioni").
+- Disegno: un canvas; Path2D per livello costruiti una volta per risultato; griglia che segue lo zoom; durante i gesti si sposta la bitmap già disegnata con `transform` CSS e il ridisegno nitido avviene 140 ms dopo; risoluzione del canvas limitata (dpr ≤ 2 e ≤ 4,2 Mpx).
+- Tema chiaro e scuro, tastiera (⌘O, ⌘Z, ⌘E, F, M, +, −, Esc, Invio), trascina e rilascia, incolla.
+
+---
+
+## 8. Test e risultati
+
+### 8.1 Foto di riferimento
+
+- **Palazzo** (foto dell'utente, facciata in conci con portali ad arco, arcatelle e bifora; copia di lavoro 1200×1600). Riquadro della facciata usato nei test: (165, 260)–(1070, 1110).
+- **Lisbona** (foto inviata dall'utente, palazzo intonacato con finestre, balconi e porta ad arco; 800×1000). Riquadro: (40, 175)–(765, 865).
+- Le foto **non sono nel repository**: vanno richieste all'utente o sostituite.
+
+### 8.2 Su iPhone (verificato dall'utente, pagina `prova-ai/`, Safari iOS 18.7, ONNX Runtime 1.21.0, nel thread principale)
+
+| Prova | Disegno neurale | Segmentazione |
+|---|---|---|
+| Palazzo, regione 900×858 / 900×894 | 47,6 s (12 riquadri) | 231 s, 146 forme, 1668 decodifiche, 124 ms per punto |
+| Palazzo, immagine intera 675×900 | 106,6 s | 291 s, **86 forme** (troppo poche: facciata piccola nell'immagine) |
+| Palazzo, solo facciata 900×804 | 56,9 s | 269 s, **211 forme** |
+| Lisbona 748×701 | 42,8 s (9 riquadri) | 238,5 s, 127 forme |
+
+Conclusione verificata: lavorare **solo sulla facciata** è essenziale (211 forme contro 86). Su iPhone una conversione Dettagliata richiede circa 5 minuti. Non ci sono stati blocchi, salvo una seconda esecuzione più lenta, con causa non determinata.
+
+### 8.3 Versione dev (verificato in Chromium headless con Playwright)
+
+Ambiente: container Linux con 2 core. ONNX Runtime Web non si poteva scaricare (CDN bloccata), quindi `strumenti/mock_ort.js` sostituisce `ort` con un ponte verso `strumenti/server.py`, che esegue **gli stessi file ONNX** con onnxruntime Python. Logica dell'app, worker, tasselli e vettorizzazione sono quindi quelli reali; i tempi **non** rappresentano Safari.
+
+| Prova | Risultato |
+|---|---|
+| Palazzo, Dettagliata, riquadro manuale, 390×844 | 127 s in tutto; disegno neurale 17 s; forme 1 min 44 s (882 decodifiche); vettorizzazione circa 1 s; 210 forme; attività lunghe sul thread principale: 2, massimo 109 ms |
+| Palazzo, Dettagliata, riquadro automatico (120, 280, 1096, 1160), 1440×900 | 127 s; 952 decodifiche; 179 forme (12 archi, 142 rettangoli, 5 cerchi, 20 poligoni); attività lunghe: 2, massimo 86 ms |
+| Lisbona, Dettagliata, riquadro automatico, 1440×900 | 174 s; 1415 decodifiche; 109 forme; nessuna attività lunga |
+| Prompt dalle celle neurali contro griglia sola (stessa foto) | 882–952 decodifiche contro 1572 della griglia fitta |
+| Fluidità di pan e zoom con CPU rallentata 4× (CDP) | dev **60 fps**, p95 17 ms, su 390 e 1440 px. Prima dell'ottimizzazione con trasformazione CSS e canvas limitato: 18 fps e p95 117 ms a 1440 px. La v3 pubblicata misurata allo stesso modo: 60 fps (in Chrome; il lag su iPhone segnalato dall'utente non si riproduce in Chromium) |
+| Pizzico (CDP touch) | Corretto dopo una correzione: le coordinate vanno lette dal contenitore, non dal canvas trasformato |
+| Annulla durante la conversione, rilancio, errore senza ONNX Runtime, metodo classico dal vivo, tema scuro, modifica ed elimina/annulla | Tutti verificati, nessun errore JavaScript |
+| Memoria JS (Chrome `performance.memory`) | 10–14 MB di heap principale dopo una conversione; i worker non sono misurati |
+
+### 8.4 DXF
+
+- Il DXF esportato è stato riletto con `strumenti/dxfrender.py`, un lettore indipendente che interpreta il bulge come un CAD. Verificati: tabelle LTYPE e LAYER; 4 layer con colori; LINE e POLYLINE chiuse; archi curvati nel verso giusto (portali e archetti in alto).
+- **Non verificato**: apertura in AutoCAD o in un altro CAD reale; il pacchetto `ezdxf` non era installabile nell'ambiente.
+
+### 8.5 Qualità: cosa funziona e cosa no (osservato sulle due foto)
+
+Funziona:
+- conci come rettangoli chiusi;
+- portali, finestre ad arco, arcatelle e bifora come archi veri;
+- cerchi;
+- sul palazzo di Lisbona: finestre, porta ad arco, fasce marcapiano (STRUTTURA), balconi.
+
+Problemi aperti:
+- contorno esterno dell'edificio quasi assente in STRUTTURA (palazzo: 1–2 linee);
+- frammenti neurali residui nelle zone non segmentate;
+- alcuni conci piccoli presi per archi (falsi positivi);
+- ringhiere e balconi come poligoni irregolari;
+- la modalità Rapida è rumorosa;
+- il riquadro automatico è approssimativo (sul palazzo include parte del terreno; su Lisbona arriva fino al bordo destro);
+- alberi e terreno non vengono disegnati (PhotoCAD invece li disegna).
+
+### 8.6 Non verificato
+
+- La versione dev su iPhone reale: in particolare ONNX Runtime **dentro un Web Worker** su Safari iOS. C'è un ripiego automatico nel thread principale, ma anche il ripiego non è testato su iOS.
+- I tempi della versione dev su iPhone.
+- Il comportamento con la memoria su iPhone con modelli caricati in un worker.
+- L'apertura dei DXF in AutoCAD.
+
+---
+
+## 9. PhotoCAD: cosa sappiamo e come lo sappiamo
+
+### 9.1 REA (Reverse Engineer Anything)
+
+- Repository `github.com/morluto/rea`, licenza MIT, versione 6.8.0 (commit `93b8b82`). È un server MCP e una CLI per il reverse engineering di binari, app JavaScript/Electron, APK e siti web.
+- Per i siti si collega via CDP a un browser Chrome dell'utente: DOM, script, risorse, metadati di rete, analisi dei bundle (`inspect_web_page`, `analyze_web_bundle`, `observe_web_session`).
+- Requisiti: Node 22.23.4+ o 24.22.1+, npm, installazione tramite `install.sh` o npm, browser Chrome.
+- **Non è stato installato né usato**, per due motivi:
+  1. **Termini di servizio di PhotoCAD**, sezione 4: vietano di "Attempt to copy, reverse-engineer or extract the technology behind the service" e di usare strumenti automatici per conversioni in massa senza autorizzazione. Anche il DISCLAIMER di REA richiede di avere l'autorizzazione e di rispettare i termini del servizio analizzato.
+  2. **Ambiente**: npm e la rete verso photocad.ai non erano raggiungibili dal container.
+- Le informazioni qui sotto vengono quindi solo dalle **pagine pubbliche** di PhotoCAD (lette con WebFetch) e dal video registrato dall'utente.
+
+### 9.2 Fatti verificati (citazioni dalle pagine pubbliche)
+
+- **Elaborazione lato server.** Privacy: "Images you upload are sent to our AI processing pipeline to generate vector conversions"; infrastruttura negli Stati Uniti; fornitori citati: Supabase, Stripe, Vercel e "the cloud AI infrastructure our conversion pipeline runs on". I modelli e il fornitore AI non sono nominati. "We do not use your uploaded images to train AI models."
+- **Disegno generativo.** Documentazione API (`photocad.ai/api`): "PhotoCAD's AI raster-to-vector engine … this is generative drawing, not millisecond inference."
+- **Riprove automatiche di qualità.** "automatic quality retries or very detailed images can take up to about two minutes"; tempo tipico di circa un minuto; API asincrona con polling.
+- **Termini.** "Because the AI processes similar inputs in similar ways, similar uploads may produce similar outputs for different users."
+- **Ingresso.** Ridimensionamento a 2400 px sul lato lungo. Formati: JPEG, PNG, WebP, AVIF, TIFF, GIF, HEIC, SVG, PDF.
+- **Opzioni.**
+  - `detailed` (predefinito true): "Maximum detail. Set false for a simplified drawing."
+  - `remove_background`: "Isolates the subject before conversion."
+- **Uscite.**
+  - DXF in versione R2000 (predefinita) o R12; DWG; SVG; PDF; anteprima.
+  - JSON "geometry": percorsi come **liste di punti** con flag `closed`, in mm, asse y in su, organizzati in **layer**. La documentazione non nomina archi né Bézier.
+  - I nomi dei layer hanno un prefisso; esempio dalla documentazione: `ACME_BEAGLE_PROFILE`.
+  - DXF e DWG usano linea "hairline" ("so CAM software reads paths as centerlines").
+  - Scala predefinita: 300 mm sul lato lungo più 5 mm di margine.
+- **Prezzo.** 1 credito per conversione, 2 $ a credito dopo i crediti gratuiti.
+
+### 9.3 Osservazioni dal video dell'utente (fatti visivi)
+
+- Durante l'attesa l'interfaccia mostra un'animazione a puntini con le scritte "Refining linework" e "Final checks", e gli interruttori "Remove bg" e "Max detail".
+- Il risultato ha ogni concio come contorno chiuso, uno spessore di linea uniforme, archi e arcatelle completi anche nelle zone in ombra, alberi disegnati come contorni e il terreno come tratti sparsi.
+
+### 9.4 Ipotesi (non verificate)
+
+- Il cuore è probabilmente un **modello generativo di disegno** (un modello immagine-a-immagine, per esempio della famiglia diffusione) che ridisegna la foto come line art pulita, seguito da una vettorizzazione in polilinee e da controlli automatici con eventuale rigenerazione. Lo suggeriscono "generative drawing", le "quality retries", "similar outputs" e il tempo di circa un minuto su GPU cloud.
+- I layer per parti (per esempio "PROFILE") fanno pensare a una scomposizione semantica, ad esempio un contorno del soggetto separato dai dettagli. Il metodo non è noto.
+- "remove_background" fa pensare a una segmentazione del soggetto prima del disegno.
+
+### 9.5 Sconosciuto
+
+Quale modello usano, se usano segmentazione o profondità, l'algoritmo di vettorizzazione, i criteri dei controlli di qualità, l'hardware e i nomi completi dei layer.
+
+### 9.6 Risposta alla domanda principale
+
+Perché PhotoCAD produce un disegno più coerente:
+
+1. **Ridisegna, non rileva.** Un modello generativo grande, su GPU nel cloud, produce direttamente una line art "come la farebbe un disegnatore", già chiusa e senza grana. Fotovettore combina un modello piccolo (Informative Drawings, 17 MB) con una segmentazione (MobileSAM) e poi deve ricostruire geometria e pulizia con regole.
+2. **Calcolo e risoluzione.** PhotoCAD lavora su 2400 px su server. Fotovettore lavora su 900 px su un telefono, con un solo thread WASM.
+3. **Riprove di qualità.** PhotoCAD rigenera se il risultato non supera i controlli; Fotovettore fa un solo passaggio.
+4. **Uniformità.** La line art generata ha già un solo spessore e linee pulite; i nostri contorni nascono da maschere quantizzate (256×256 per riquadro) e da uno scheletro.
+
+Dove Fotovettore è già diverso o migliore per l'uso CAD:
+- archi veri (bulge) invece di soli punti;
+- livelli semantici (STRUTTURA/ELEMENTI/DETTAGLI/RICOSTRUZIONI) con le geometrie stimate separate;
+- tutto locale e gratuito.
+
+### 9.7 Miglioramenti applicabili, dedotti dal confronto
+
+- Riprove di qualità automatiche: misurare copertura della facciata, quota di forme irregolari e frammenti; se il risultato è scarso, rieseguire a risoluzione maggiore o con altra soglia.
+- Risoluzione più alta su desktop (1200–1600 px) e backend WebGPU dove disponibile.
+- Opzione "rimuovi sfondo": maschera dell'edificio con MobileSAM (prompt al centro del riquadro) per scartare terreno e alberi.
+- Un livello "contorno" (PROFILE) dal bordo dell'unione delle forme e delle linee strutturali, distinto in RICOSTRUZIONI dove è stimato.
+- Valutare un modello generativo di line art più forte solo come opzione desktop o "computer di casa", senza servizi a pagamento.
+- Benchmark consentito: l'utente può scaricare le **proprie** conversioni PhotoCAD (DXF/SVG) e confrontarne struttura e densità con le nostre. Non serve analizzare il loro codice.
+
+---
+
+## 10. Decisioni tecniche, tentativi falliti e motivi
+
+1. **v1–v3 classiche (solo geometria, nessuna AI)**: Canny, multi-scala, maschera del soggetto, gerarchia, archi. Risultato giudicato mediocre sulla foto reale: i bordi non distinguono un giunto da un'ombra o dalla grana. Il metodo resta nella modalità "Classica".
+2. **Scelta dei modelli**:
+   - **PiDiNet e TEED**: pesi scaricabili via git, ma serve PyTorch, non installabile (PyPI bloccato); non testati.
+   - **DexiNed, Stable Diffusion + ControlNet lineart, FacadeLineNet**: non testati (pesi su Hugging Face bloccato; SD troppo pesante per iPhone; FacadeLineNet segmenta disegni, non foto).
+   - **Informative Drawings "contour"**: scelto perché disegna i conci come contorni chiusi.
+   - **MobileSAM**: segmenta quasi ogni concio quando si lavora a riquadri.
+3. **MobileSAM a riquadri**: a immagine intera trovava poche forme (83 su 1600 punti); a riquadri di 360 px ingranditi a 1024 ne trova circa 250.
+4. **Prompt dalle celle neurali**: riducono le decodifiche di circa il 40% rispetto alla griglia fitta.
+5. **Passaggio largo**: aggiunto perché i portali più grandi di un riquadro venivano scartati (toccavano il bordo).
+6. **Regolarizzazione**:
+   - gli archi si cercano prima dei rettangoli, perché una finestra alta ad arco ha un riempimento > 0,84;
+   - il criterio dell'arco usa il profilo stretto in alto, perché gli angoli arrotondati delle maschere generavano falsi archi;
+   - la tolleranza è relativa alla risoluzione della maschera, perché i portali del passaggio largo finivano tutti tra le ricostruzioni.
+7. **Niente ponti stimati sui dettagli**: generavano trattini rossi ovunque e l'utente non vuole geometrie inventate.
+8. **Canvas al posto di SVG**: con SVG a `non-scaling-stroke` e molte linee il ridisegno durante zoom e spostamento era costoso; ora durante il gesto si sposta la bitmap già disegnata.
+9. **Due worker** (geometrico e AI): il thread principale resta libero, con attività lunghe ≤ 0,11 s durante la conversione.
+10. **Non usato**: REA (sezione 9.1); `gh api` (bloccato dal proxy); siti `github.io` non raggiungibili dal container (l'utente verifica dal telefono).
+
+---
+
+## 11. Come eseguire, testare e pubblicare
+
+### 11.1 Modificare e assemblare
+
+```
+# modificare i file in sviluppo/src/, poi:
+python3 sviluppo/build.py            # rigenera dev/index.html
+node --check sviluppo/.check.js      # controllo di sintassi dello script assemblato
+```
+
+### 11.2 Provare in locale (senza CDN)
+
+```
+python3 sviluppo/build.py
+PORT=8765 sviluppo/strumenti/avvia_test.sh &     # prepara strumenti/sito/ e avvia il server (circa 10 s per caricare i modelli)
+# pagina: http://127.0.0.1:8765/dev/index.html?ort=/mock_ort.js
+FOTO=/percorso/foto.jpg BASE=http://127.0.0.1:8765 node sviluppo/strumenti/smoke.js   # prova rapida con l'esempio integrato
+```
+
+Verificato il 2/11/2026: `smoke.js` contro questo allestimento → 158 percorsi su 390 e 1440 px, nessun errore.
+
+`server.py` serve i file statici e l'endpoint `POST /run?m=id|enc|dec`, che esegue i modelli in Python. `mock_ort.js` imita `ort.InferenceSession`/`ort.Tensor` e funziona anche nel worker. Richiede `onnxruntime`, `numpy` e `playwright` (Python o Node).
+
+Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei modelli>`.
+
+### 11.3 Script in `sviluppo/strumenti/`
+
+| Script | Uso |
+|---|---|
+| `pre.py <foto> x0 y0 x1 y1 <nome>` | Calcola disegno neurale, forme e grigio in `dati/` con la stessa logica del worker (circa 2–3 min su 2 core) |
+| `run_ai.js <nome>` | Esegue solo la vettorizzazione di `src/engine.js` sui dati salvati (3–5 s), per iterare sulle regole |
+| `render.py <nome> white\|over` | Disegna i percorsi in PNG (nero struttura, blu elementi, grigio dettagli, rosso ricostruzioni) |
+| `dxfrender.py <file.dxf> <out.png>` | Rilegge un DXF come un CAD e lo disegna; stampa layer, LTYPE e conteggi |
+| `e2e.js <foto> <x0,y0,x1,y1\|auto> <detail\|fast\|classic> <w> <h> <prefisso>` | Prova completa nel browser (Playwright), con screenshot, DXF, tempi e attività lunghe |
+| `perf.js` | Fluidità di pan e zoom con CPU 4× più lenta (variabile `FOTO`; usa `/old/index.html` per il confronto) |
+| `ui.js`, `fb.js`, `smoke.js` | Foglio, modifica, pizzico, tema scuro, ripieghi, annulla, esempio integrato (variabili `FOTO`/`FOTO2`) |
+
+### 11.4 Pubblicare
+
+1. Lavorare sempre in `sviluppo/src`, assemblare con `python3 sviluppo/build.py` e fare commit di `dev/index.html` insieme ai sorgenti.
+2. GitHub Pages pubblica dal branch `main` (radice); servono 1–2 minuti.
+3. **Non toccare `index.html`** finché l'utente non approva il passaggio della versione dev a quella principale. Al momento del passaggio: copiare `dev/index.html` in `index.html` e cambiare `MODEL_BASE` da `../prova-ai/modelli/` a `prova-ai/modelli/` (oppure spostare i modelli).
+4. Caricamento via sito di GitHub: limite di 25 MB per file (l'encoder pesa 28 MB). Per questo i modelli sono stati caricati con git dall'ambiente di Claude.
+
+---
+
+## 12. Accessi e strumenti necessari
+
+- **GitHub**: dal container di Claude, `git clone` e `git push` funzionano tramite il proxy (repository collegato con `add_repo` in scrittura, owner `LeoMasterSlave`/`LeoMastersSlave`). L'API `gh` è bloccata e i siti `github.io` non sono raggiungibili: le verifiche del sito le fa l'utente.
+- **Rete del container** (osservato il 2/11/2026):
+  - raggiungibili `github.com` (clone e download di release);
+  - bloccati PyPI, npm, Hugging Face, jsDelivr, unpkg, cdnjs e photocad.ai (solo via WebFetch per le pagine pubbliche).
+  - Già installati: Python con numpy, onnxruntime 1.29, opencv, scikit-image, PIL; Node 22.23.4; Playwright con Chromium.
+- **Skill usate**:
+  - `apple-design` di Emil Kowalski (MIT, `github.com/emilkowalski/skills/tree/main/skills/apple-design`), proposta all'utente come skill "apple-fluid-web-design";
+  - `artifact-design` e `artifact-capabilities` (per l'artifact della v3 dentro Claude).
+- **MCP**: nessuno necessario. REA non è stato installato (sezione 9.1).
+- **iPhone dell'utente**: unico banco di prova reale per Safari.
+
+---
+
+## 13. Problemi prioritari e roadmap
+
+1. **Verificare la dev su iPhone**: worker con ONNX su Safari (oppure il ripiego), tempi, memoria, gesti, foglio, esportazione DXF da Safari (salvataggio in File). Correggere ciò che emerge.
+2. **Contorno dell'edificio in STRUTTURA**: ricavarlo da forme e linee lunghe, marcando come RICOSTRUZIONI le parti stimate.
+3. **Velocità della segmentazione su iPhone** (oggi circa 4 minuti):
+   - meno prompt (solo celle e punti non coperti, griglia più rada nei riquadri già coperti);
+   - salto dei riquadri senza celle;
+   - eventuale encoder a risoluzione minore (da verificare: il modello ha ingresso fisso 1024).
+4. **Riquadro automatico più preciso** (escludere terreno e alberi), più l'opzione "rimuovi sfondo" con MobileSAM.
+5. **Riprove automatiche di qualità** con metriche oggettive.
+6. **Desktop**: risoluzione 1200–1600 e backend WebGPU, con test reali.
+7. **Falsi archi e ringhiere**: regole più severe; i balconi come forme aperte o semplificate.
+8. Modello generativo di line art più forte, solo se gratuito, locale e con pesi disponibili; da testare sulle due foto prima di integrarlo.
+9. Calibrazione a due punti (misura nota) nell'esportazione; opzione DXF R2000 con LWPOLYLINE.
+10. Quando l'utente approva: passaggio della dev a `index.html` e aggiornamento del README.
+
+---
+
+## 14. Riferimenti
+
+- Repository: `https://github.com/LeoMastersSlave/Foto_vettore`
+- PhotoCAD: `https://photocad.ai/convert`, `https://photocad.ai/api`, `https://photocad.ai/terms`, `https://photocad.ai/privacy`
+- Informative Drawings ONNX: `https://github.com/Kazuhito00/Informative-Drawings-ONNX-Sample`; originale `https://github.com/carolineec/informative-drawings`
+- Informative Drawings nel browser (riferimento per ONNX Runtime Web, WASM): `https://webai.show/models/informative-drawings-lineart/`
+- MobileSAM ONNX: `https://github.com/palavido-dev/gratis-gis/releases/tag/models-mobilesam-v1`; originale `https://github.com/ChaoningZhang/MobileSAM`
+- ONNX Runtime Web 1.21.0: `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js`
+- REA: `https://github.com/morluto/rea`
+- Skill Apple: `https://github.com/emilkowalski/skills/tree/main/skills/apple-design`, `https://github.com/dickwu/apple-design-skill`
+
+---
+
+## Prompt per la nuova chat
+
+Copia e incolla questo messaggio in una nuova conversazione con Claude:
+
+```
+Sto sviluppando Fotovettore, una web app gratuita e locale (anche su iPhone) che converte foto di edifici in disegni CAD (DXF/SVG/PDF), ispirata a PhotoCAD. Il repository GitHub è LeoMastersSlave/Foto_vettore (GitHub può mostrarlo anche come LeoMasterSlave/foto_vettore).
+
+1. Collega il repository alla sessione con accesso in scrittura e clonalo.
+2. Leggi per intero FOTOVETTORE_HANDOFF.md nella radice: contiene obiettivi, architettura, pipeline, modelli, test, decisioni, limiti e roadmap. Considera verificato solo ciò che il documento indica come tale.
+3. Controlla lo stato del repository: git log (l'ultimo lavoro documentato è il commit che aggiunge FOTOVETTORE_HANDOFF.md e la cartella sviluppo/), la presenza di index.html (versione pubblicata, da non toccare), dev/index.html, sviluppo/src/*, sviluppo/strumenti/* e prova-ai/modelli/*.onnx. Rigenera dev/index.html con python3 sviluppo/build.py e verifica che non cambi rispetto al commit (git diff).
+4. Verifica cosa raggiunge il tuo ambiente (GitHub, PyPI, npm, CDN) prima di pianificare.
+5. Riprendi dalla sezione 13 del documento: il primo passo è verificare la versione dev su iPhone. Chiedimi la riga "Prestazioni" da Impostazioni avanzate e gli eventuali errori dopo una conversione su https://leomastersslave.github.io/Foto_vettore/dev/, poi correggi ciò che emerge.
+
+Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.html senza il mio consenso; niente servizi a pagamento o API commerciali; non dichiarare test non eseguiti; distingui fatti e ipotesi; chiedimi le foto di test (non sono nel repository) e le autorizzazioni quando servono. Rispondimi in italiano.
+```
