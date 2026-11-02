@@ -393,7 +393,7 @@ Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei mo
 5. **Riprove automatiche di qualità** con metriche oggettive.
 6. **Desktop**: risoluzione 1200–1600 e backend WebGPU, con test reali.
 7. **Falsi archi e ringhiere**: regole più severe; i balconi come forme aperte o semplificate.
-8. **Modelli generativi (in corso, sezioni 15.7–15.8)**: prima prova su IMG_7781 fatta (SDXL promettente, SD 1.5 scartato, vettorizzatore che non chiude le celle da solo). Prossimo: Colab su Palazzo e Lisbona con `MODELLI = sdxl`; lavoro sul motore per celle del disegno regolari, misurato con `rianalizza()`. Prima di integrare va dimostrato con i confronti che il risultato migliora rispetto alla versione attuale.
+8. **Modelli generativi (in corso, sezioni 15.7–15.8)**: prima prova su IMG_7781 fatta (SDXL promettente, SD 1.5 scartato, vettorizzatore che non chiude le celle da solo). Prossimo: Colab sugli altri prospetti della chiesetta (fianco e abside, ritagliati, `RIQUADRO = tutta`) con `MODELLI = sdxl`; lavoro sul motore per celle del disegno regolari, misurato con `rianalizza()`. Prima di integrare va dimostrato con i confronti che il risultato migliora rispetto alla versione attuale.
 9. Calibrazione a due punti (misura nota) nell'esportazione; opzione DXF R2000 con LWPOLYLINE.
 10. Quando l'utente approva: passaggio della dev a `index.html` e aggiornamento del README.
 
@@ -491,7 +491,7 @@ provider = {
 
 ### 15.7 Prossimi passi
 
-1. L'utente apre il notebook su Colab, carica Palazzo e Lisbona (e, se vuole, le proprie conversioni PhotoCAD delle stesse foto) e manda `risultati_fotovettore.zip`.
+1. L'utente apre il notebook su Colab, carica i prospetti della chiesetta (e, se vuole, le proprie conversioni PhotoCAD delle stesse foto) e manda `risultati_fotovettore.zip`.
 2. Analisi: misure, sovrapposizioni e DXF in AutoCAD. Integrare solo se un candidato migliora in modo misurabile completezza, aperture e archi **senza** peggiorare precisione e linee inventate.
 3. Se SDXL vince ma SD 1.5 no: modalità "server locale/Colab" come provider gratuito facoltativo. Se vince SD 1.5: valutare la conversione ONNX/WebGPU per il browser (desktop).
 4. Regolazioni possibili nel notebook: `FORZA_CONTROLLO`, `SEMI`, `PASSI`, prompt in `fv_banco.PROMPT`/`NEGATIVO`.
@@ -527,7 +527,7 @@ Foto dell'utente: facciata romanica in conci, con 2 portali ad arco, finestra mo
 - **Senza forme** il motore produce quasi solo tratti aperti (1–5 celle chiuse anche dal disegno SDXL): la chiusura dei contorni nel DXF oggi viene **solo** da MobileSAM. Per questo i DXF "+ SAM" si somigliano tutti. Il vettorizzatore è diventato il collo di bottiglia.
 - "**Celle del disegno**" (nuova funzione `celle_come_forme`: le aree bianche chiuse del disegno passate al motore come forme) dà le misure migliori in assoluto, ma **a vista è peggiore**: celle fuse in grandi poligoni irregolari, archetti pensili deformati, bifora ridotta a due rettangoli. Va letta con "celle rettangolari" 0,48 contro 0,90. È un caso in cui le misure di completezza premiano un disegno meno utilizzabile in CAD: non integrare così.
 
-**Conclusioni (su una sola foto: da confermare su Palazzo e Lisbona)**:
+**Conclusioni (su una sola foto: da confermare sugli altri prospetti della chiesetta)**:
 1. SDXL + ControlNet Union è il candidato da seguire; SD 1.5 no.
 2. Miglioramento sicuro ma piccolo: **SDXL come mappa di tratto al posto di Informative Drawings, con le stesse forme MobileSAM** (completezza 0,80 → 0,85, precisione 0,944 → 0,953, forme invariate).
 3. Il guadagno grande (completezza 0,96, aperture 5/5) richiede un vettorizzatore che chiuda le celle dal disegno **in modo regolare**: per esempio celle del disegno solo dove MobileSAM non ha già una forma, regolarizzate con `regShape` più severo, separando le celle fuse lungo i tratti deboli. È lavoro sul motore, verificabile qui con `rianalizza()` senza GPU.
@@ -561,7 +561,7 @@ Due foto nuove eseguite dall'utente col banco già corretto:
 - SD 1.5: su IMG_7782 e Lisbona è simile a SDXL, su IMG_7781 molto peggiore (campiture, aperture sbagliate). Resta scartato per instabilità.
 - Le misure di aperture e archi su Lisbona non funzionano: le finestre su facciata bianca non risultano "scure" (riferimento di consenso vuoto). Limite noto della misura, da rivedere per le facciate intonacate.
 
-**Conclusione su tre foto**: SDXL + SAM migliora o pareggia sempre (completezza +4 e +10 punti sulla chiesa, parità su Lisbona) con forme identiche. Il guadagno grande resta bloccato dal vettorizzatore, che non chiude contorni dalle linee: il prossimo lavoro è sul motore (15.8, punto 3), misurabile qui sulle tre serie salvate senza GPU.
+**Conclusione su tre foto** (Lisbona poi esclusa dall'utente, vedi 15.10): SDXL + SAM migliora o pareggia sempre (completezza +4 e +10 punti sulla chiesa, parità su Lisbona) con forme identiche. Il guadagno grande resta bloccato dal vettorizzatore, che non chiude contorni dalle linee: il prossimo lavoro è sul motore (15.8, punto 3), misurabile qui sulle tre serie salvate senza GPU.
 
 ---
 
@@ -581,3 +581,13 @@ Sto sviluppando Fotovettore, una web app gratuita e locale (anche su iPhone) che
 
 Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.html senza il mio consenso; niente servizi a pagamento o API commerciali; non dichiarare test non eseguiti; distingui fatti e ipotesi; chiedimi le foto di test (non sono nel repository) e le autorizzazioni quando servono. Rispondimi in italiano.
 ```
+
+### 15.10 Ambito deciso dall'utente (2/11/2026)
+
+- **Interessa solo la chiesetta** (edificio romanico in conci delle foto IMG_7781/IMG_7782). **Lisbona non va più usata** per test, confronti o messe a punto. Anche Palazzo non è richiesto. I dati di Lisbona in 15.9 restano solo come storico. La soglia adattiva di `normalizza_disegno()`, nata da quel caso, resta perché vale per qualunque disegno chiaro.
+- Prospetti disponibili, foto inviate dall'utente:
+  - facciata: 4 scatti, già provati IMG_7781 e IMG_7782;
+  - fianco con scala esterna, tiranti e croce: 2 scatti;
+  - abside doppia: 2 scatti; superfici curve, ripresa leggermente dal basso;
+  - un quarto prospetto parzialmente coperto da un albero, da ricomporre unendo più foto (non ancora ricevute).
+- Il riquadro automatico sbaglia su fianco e abside (prende solo la cornice o una lesena). Ritagli preparati da Claude: `chiesetta_fianco.jpg` (foto 61d929b6, riquadro 60,70–2370,1370) e `chiesetta_abside.jpg` (foto af308387, riquadro 90,460–1640,1740). Si caricano in Colab con `RIQUADRO = tutta`, opzione aggiunta al notebook.
