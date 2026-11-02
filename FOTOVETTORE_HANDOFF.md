@@ -591,3 +591,18 @@ Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.h
   - abside doppia: 2 scatti; superfici curve, ripresa leggermente dal basso;
   - un quarto prospetto parzialmente coperto da un albero, da ricomporre unendo più foto (non ancora ricevute).
 - Il riquadro automatico sbaglia su fianco e abside (prende solo la cornice o una lesena). Ritagli preparati da Claude: `chiesetta_fianco.jpg` (foto 61d929b6, riquadro 60,70–2370,1370) e `chiesetta_abside.jpg` (foto af308387, riquadro 90,460–1640,1740). Si caricano in Colab con `RIQUADRO = tutta`, opzione aggiunta al notebook.
+
+### 15.11 Valutato: FacadeVectorizer / "Orthogon" (RyutaKinzoku, 2/11/2026)
+
+- `github.com/RyutaKinzoku/FacadeVectorizer`, licenza MIT, ultimo commit del 27/6/2026. App desktop Windows in Python (PySide6). Pipeline **classica senza AI**: filtro bilaterale → Canny → FastLineDetector → raddrizzamento a orizzontale/verticale entro 3° e unione dei segmenti collineari → DXF. La cartella dei modelli è vuota e la segmentazione semantica è solo in roadmap.
+- Limiti nel codice: un solo layer (WALLS), solo segmenti rettilinei da 2 punti (niente archi, niente curve), nessun contorno chiuso. Raddrizzamento prospettico solo con 4 angoli inseriti a mano.
+- Provato qui sullo stesso ritaglio della facciata IMG_7782 (vettorializzatore e regolarizzatore originali, senza GUI):
+
+| Metodo | Precisione | Completezza | Inventate | Celle chiuse | Aperture | Archi |
+|---|---|---|---|---|---|---|
+| FacadeVectorizer | 0,986 | 0,694 | 0,048 | 5 | 0 | 0 |
+| Fotovettore attuale | 0,948 | 0,802 | 0,084 | 211 | 4 | 8 |
+| SDXL + SAM | 0,955 | 0,898 | 0,052 | 211 | 4 | 8 |
+
+  A vista dà trattini spezzati: archi e archetti frammentati, conci non chiusi. La precisione alta dipende solo dal fatto che disegna poco. È simile alle versioni classiche v1–v3 di Fotovettore, già giudicate insufficienti dall'utente.
+- **Non adottato.** Spunti riusabili (MIT): il raddrizzamento con 4 angoli (omografia) come funzione futura di Fotovettore, e la regola "snap ortogonale + unione dei collineari con tolleranza di gap", che in parte esiste già nel motore (`straighten`, `mergeLines`).
