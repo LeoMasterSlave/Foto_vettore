@@ -1,3 +1,6 @@
 .check.js
 strumenti/dati/
 strumenti/sito/
+strumenti/*.png
+strumenti/*.dxf
+strumenti/*_paths.json
