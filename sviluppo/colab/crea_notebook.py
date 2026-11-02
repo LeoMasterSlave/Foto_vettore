@@ -68,7 +68,7 @@ print('Riquadro di prova del motore:', fb.rileva_riquadro(__import__('numpy').fu
 
 code('''
 #@title 2. Impostazioni (i valori predefiniti vanno bene)
-MODELLI = "entrambi"  #@param ["entrambi", "sdxl", "sd15", "nessuno (solo Fotovettore attuale)"]
+MODELLI = "sdxl"  #@param ["sdxl", "entrambi", "sd15", "nessuno (solo Fotovettore attuale)"]
 SEMI = 3  #@param {type:"slider", min:1, max:6, step:1}
 PASSI = 30  #@param {type:"slider", min:15, max:50, step:5}
 FORZA_CONTROLLO = 1.0  #@param {type:"slider", min:0.5, max:1.5, step:0.05}
@@ -77,6 +77,7 @@ RIQUADRO = ""  #@param {type:"string"}
 LARGHEZZA_MM = 10000  #@param {type:"integer"}
 CONFRONTA_PHOTOCAD = False  #@param {type:"boolean"}
 SALVA_SU_DRIVE = False  #@param {type:"boolean"}
+# MODELLI: SD 1.5 e' stato scartato nella prova del 2/11/2026 (linee inventate, aperture sbagliate); resta come opzione.
 # SEMI: quante varianti generare per modello; si tiene la migliore secondo le misure (riprova di qualita').
 # FORZA_CONTROLLO: quanto il disegno deve seguire i tratti della foto (piu' alto = piu' fedele, meno "inventato").
 # RIQUADRO: vuoto = automatico (come nell'app). Altrimenti "x0,y0,x1,y1" in pixel della foto ridotta a 2400 px di lato lungo.

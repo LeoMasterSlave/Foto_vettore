@@ -546,6 +546,37 @@ def _dims(rw, rh, lato, mult=64):
     return max(mult, int(round(rw * k / mult)) * mult), max(mult, int(round(rh * k / mult)) * mult)
 
 
+def normalizza_disegno(g):
+    """Mappa di tratto 0..1 (0 = linea) da un disegno generato. I modelli di diffusione disegnano spesso linee grigie
+    su carta grigia (SDXL: carta ~220, linee 90-160): una soglia fissa a 128 perde gran parte del tratto.
+    Si stima la carta localmente (chiusura 15 px + sfocatura) e si usa il contrasto relativo:
+    tratto = almeno ~18% piu' scuro della carta circostante (valore 0.5 della mappa)."""
+    g = np.asarray(g, np.float32)
+    bg = cv2.GaussianBlur(cv2.morphologyEx(g, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8)), (0, 0), 5)
+    return np.clip((g / np.maximum(bg, 1.0) - 0.64) / 0.36, 0, 1)
+
+
+def celle_come_forme(neurale, amin=0.0002, amax=0.25, cresc=2):
+    """Celle chiuse del disegno come forme per il motore (alternativa a MobileSAM): ogni area bianca racchiusa dal
+    tratto, allargata di cresc px per riportare il contorno sull'asse della linea. Esperimento del 2/11/2026:
+    completa ma irregolare (celle fuse, archetti deformati), vedi handoff 15.8."""
+    rh, rw = neurale.shape
+    A = rh * rw
+    lib = (cv2.dilate((neurale < 0.5).astype(np.uint8), np.ones((3, 3), np.uint8)) == 0).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(lib, connectivity=4)
+    out = []
+    k = np.ones((2 * cresc + 1, 2 * cresc + 1), np.uint8)
+    for i in range(1, n):
+        x, y, w, h, a = [int(t) for t in st[i]]
+        if a < amin * A or a > amax * A or x == 0 or y == 0 or x + w >= rw or y + h >= rh:
+            continue
+        m = cv2.dilate((lab == i).astype(np.uint8), k)
+        cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        c = max(cs, key=cv2.contourArea).reshape(-1, 2).astype(np.float32) + 0.5
+        out.append([round(float(v), 2) for v in c.ravel()])
+    return out
+
+
 def controllo_tratto(neurale, segs, size):
     """Immagine di controllo: tratti bianchi su nero (Informative Drawings + segmenti rettilinei della foto)."""
     rh, rw = neurale.shape
@@ -739,8 +770,9 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
             dt = round(time.time() - t, 1)
             g = grigio(np.asarray(out.convert('RGB')))
             g = cv2.resize(g, (rw, rh), interpolation=cv2.INTER_AREA)
-            m, _ = misura(g < 128, reg, ev)
-            prove.append((punteggio(m), s, g, m, dt))
+            neu = normalizza_disegno(g)
+            m, _ = misura(neu < 0.5, reg, ev)
+            prove.append((punteggio(m), s, neu, m, dt))
             salva(os.path.join(D, '2%s_seme%d.png' % (chiave, s)), np.clip(g, 0, 255).astype(np.uint8))
             log('  %s seme %d: %.1f s, completezza %.3f, precisione %.3f, inventate %.3f' % (
                 C.nome, s, dt, m['completezza_strutturale'], m['precisione_tratto'], m['linee_lunghe_inventate']))
@@ -751,13 +783,75 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
                              'seme_scelto': best[1], 'secondi_per_immagine': [p[4] for p in prove],
                              'punteggi': [round(p[0], 3) for p in prove], 'licenze': C.licenze,
                              'dimensione_generazione': list(size)}
-        grezzi[C.nome] = best[2] < 128
-        neurali[C.nome] = np.clip(best[2] / 255.0, 0, 1)
+        grezzi[C.nome] = best[2] < 0.5
+        neurali[C.nome] = best[2]
 
-    if photocad:
+    return _analizza(D, os.path.basename(foto), rgb.shape, box, reg, ev, neur_id, forme, usa_sam, grezzi, neurali,
+                     semi_info, tempi, larghezza_mm, photocad, passi, t0)
+
+
+def rianalizza(D, larghezza_mm=10000, usa_sam=True, photocad=None, uscita=None):
+    """Ripete misure, vettorizzazione e rapporto dalle immagini gia' generate in D (senza GPU).
+    MobileSAM viene ricalcolato (stesso seme di esegui_confronto) se forme_sam.json manca."""
+    t0 = time.time()
+    with open(os.path.join(D, 'risultati.json')) as fh:
+        vecchio = json.load(fh)['info']
+    reg = cv2.cvtColor(cv2.imread(os.path.join(D, '01_regione.png')), cv2.COLOR_BGR2RGB)
+    rh, rw = reg.shape[:2]
+    ev = evidenza_foto(reg)
+    neur_id = cv2.imread(os.path.join(D, '10_informative_drawings.png'), 0).astype(np.float32) / 255
+    fs = os.path.join(D, 'forme_sam.json')
+    tempi = {}
+    if usa_sam and os.path.exists(fs):
+        forme = json.load(open(fs))
+    elif usa_sam:
+        t = time.time()
+        log('MobileSAM (CPU, qualche minuto)...')
+        forme = mobilesam_forme(reg)
+        tempi['mobilesam_s'] = round(time.time() - t, 1)
+    else:
+        forme = []
+    O = uscita or D + '_rianalisi'
+    os.makedirs(O, exist_ok=True)
+    for f in os.listdir(D):
+        if f.endswith('.png') and (f.startswith('0') or f.startswith('1') or f.startswith('2')) or f.startswith('00_'):
+            shutil.copy(os.path.join(D, f), O)
+    grezzi = {'Informative Drawings (attuale)': neur_id < 0.5}
+    neurali = {'Fotovettore attuale': neur_id}
+    semi_info = {}
+    for chiave, C in CANDIDATI.items():
+        files = sorted(f for f in os.listdir(D) if f.startswith('2%s_seme' % chiave))
+        if not files:
+            continue
+        prove = []
+        for f in files:
+            neu = normalizza_disegno(cv2.imread(os.path.join(D, f), 0))
+            m, _ = misura(neu < 0.5, reg, ev)
+            s = int(f.split('seme')[1].split('.')[0])
+            prove.append((punteggio(m), s, neu, m))
+            log('  %s seme %d: completezza %.3f, precisione %.3f, inventate %.3f' % (
+                C.nome, s, m['completezza_strutturale'], m['precisione_tratto'], m['linee_lunghe_inventate']))
+        prove.sort(key=lambda p: -p[0])
+        info = dict(vecchio.get('modelli', {}).get(C.nome, {}))
+        info.update({'semi': [p[1] for p in prove], 'seme_scelto': prove[0][1], 'punteggi': [round(p[0], 3) for p in prove]})
+        semi_info[C.nome] = info
+        grezzi[C.nome] = prove[0][2] < 0.5
+        neurali[C.nome] = prove[0][2]
+    tempi['generazione_originale'] = vecchio.get('tempi', {})
+    return _analizza(O, vecchio['foto'], None, vecchio['riquadro'], reg, ev, neur_id, forme, usa_sam, grezzi, neurali,
+                     semi_info, tempi, larghezza_mm, photocad, vecchio.get('passi'), t0)
+
+
+def _analizza(D, nome_foto, foto_shape, box, reg, ev, neur_id, forme, usa_sam, grezzi, neurali, semi_info, tempi,
+              larghezza_mm, photocad, passi, t0):
+    rh, rw = reg.shape[:2]
+    gray8 = np.clip(grigio(reg), 0, 255).astype(np.uint8)
+    with open(os.path.join(D, 'forme_sam.json'), 'w') as fh:
+        json.dump(forme, fh)
+    if photocad and foto_shape is not None:
         try:
             ext = carica_disegno_esterno(photocad)
-            wv, info = allinea_esterno(ext, rgb.shape, box, rw, rh, neur_id < 0.5, ev['r'])
+            wv, info = allinea_esterno(ext, foto_shape, box, rw, rh, neur_id < 0.5, ev['r'])
             semi_info['PhotoCAD (file utente)'] = info
             if wv is not None:
                 grezzi['PhotoCAD (file utente)'] = wv
@@ -766,10 +860,13 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
 
     # vettorizzazione con lo stesso motore CAD
     vettori = {}
+    # Varianti: forme MobileSAM (come l'app) oppure celle chiuse del disegno stesso. La variante "senza forme"
+    # e' stata tolta: il motore non chiude i contorni dalle sole linee (1-5 celle chiuse nella prova del 2/11/2026).
     for nm, neu in neurali.items():
-        varianti = [(nm if nm == 'Fotovettore attuale' else nm + ' + motore', forme)]
-        if nm != 'Fotovettore attuale' and usa_sam:
-            varianti.append((nm + ' + motore, senza SAM', []))
+        base = 'Fotovettore attuale' if nm == 'Fotovettore attuale' else nm + ' + SAM'
+        varianti = [(base if usa_sam else nm + ' (solo linee)', forme)]
+        varianti.append(((('Informative Drawings' if nm == 'Fotovettore attuale' else nm)) + ' + celle del disegno',
+                         celle_come_forme(neu)))
         for etichetta, fm in varianti:
             t = time.time()
             r = motore(neu, gray8, fm)
@@ -819,7 +916,7 @@ def esegui_confronto(foto, uscita, box=None, modelli=('sdxl', 'sd15'), semi=(1, 
     salva(os.path.join(D, 'confronto_vettoriali.jpg'), griglia(blocchi))
 
     tempi['totale_s'] = round(time.time() - t0, 1)
-    info = {'foto': os.path.basename(foto), 'riquadro': box, 'regione_px': [rw, rh], 'forme_sam': len(forme),
+    info = {'foto': nome_foto, 'riquadro': box, 'regione_px': [rw, rh], 'forme_sam': len(forme),
             'riferimento_aperture': len(rif_ap), 'riferimento_archi': len(rif_ar), 'tempi': tempi,
             'modelli': semi_info, 'passi': passi, 'larghezza_mm': larghezza_mm}
     with open(os.path.join(D, 'risultati.json'), 'w') as fh:

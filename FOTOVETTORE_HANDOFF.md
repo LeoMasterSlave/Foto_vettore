@@ -393,7 +393,7 @@ Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei mo
 5. **Riprove automatiche di qualità** con metriche oggettive.
 6. **Desktop**: risoluzione 1200–1600 e backend WebGPU, con test reali.
 7. **Falsi archi e ringhiere**: regole più severe; i balconi come forme aperte o semplificate.
-8. **Modelli generativi (avviato, sezione 15)**: eseguire il notebook Colab sulle due foto, analizzare lo zip, decidere con dati alla mano se e come integrare (sezione 15.7). Prima di integrare va dimostrato con i confronti che il risultato migliora rispetto alla versione attuale.
+8. **Modelli generativi (in corso, sezioni 15.7–15.8)**: prima prova su IMG_7781 fatta (SDXL promettente, SD 1.5 scartato, vettorizzatore che non chiude le celle da solo). Prossimo: Colab su Palazzo e Lisbona con `MODELLI = sdxl`; lavoro sul motore per celle del disegno regolari, misurato con `rianalizza()`. Prima di integrare va dimostrato con i confronti che il risultato migliora rispetto alla versione attuale.
 9. Calibrazione a due punti (misura nota) nell'esportazione; opzione DXF R2000 con LWPOLYLINE.
 10. Quando l'utente approva: passaggio della dev a `index.html` e aggiornamento del README.
 
@@ -495,6 +495,45 @@ provider = {
 2. Analisi: misure, sovrapposizioni e DXF in AutoCAD. Integrare solo se un candidato migliora in modo misurabile completezza, aperture e archi **senza** peggiorare precisione e linee inventate.
 3. Se SDXL vince ma SD 1.5 no: modalità "server locale/Colab" come provider gratuito facoltativo. Se vince SD 1.5: valutare la conversione ONNX/WebGPU per il browser (desktop).
 4. Regolazioni possibili nel notebook: `FORZA_CONTROLLO`, `SEMI`, `PASSI`, prompt in `fv_banco.PROMPT`/`NEGATIVO`.
+
+### 15.8 Prima prova reale su Colab (2/11/2026, foto IMG_7781)
+
+Foto dell'utente: facciata romanica in conci, con 2 portali ad arco, finestra monofora, bifora con colonnina, archetti pensili, oculi e cornice. **Non è** Palazzo né Lisbona. Eseguita dall'utente su Colab gratuito (GPU T4, `cuda` senza offload), con 3 semi e 30 passi.
+
+**Tempi (verificati)**:
+- totale 13 min 19 s;
+- caricamento dei modelli: SDXL 212 s, SD 1.5 220 s;
+- generazione: SDXL 32–34 s per variante a 1024×896, SD 1.5 16 s a 768×704;
+- Informative Drawings 26 s, MobileSAM 171 s (CPU di Colab).
+
+**Errore del banco trovato e corretto**: SDXL disegna linee grigie (90–160) su carta grigia (~220), quindi la soglia fissa a 128 perdeva gran parte del tratto (22 celle chiuse invece di 209). Ora c'è `normalizza_disegno()`: carta stimata localmente, tratto = almeno ~18% più scuro della carta. La prima tabella dello zip va ignorata. Con `rianalizza()` le misure sono state ricalcolate dalle immagini già generate, senza GPU; MobileSAM è stato ricalcolato qui con lo stesso seme (230 forme, come su Colab).
+
+**Misure dopo la correzione** (riferimento di consenso: 5 aperture, 4 archi):
+
+| Metodo | Precisione | Completezza | Inventate | Celle chiuse | Celle rettangolari | Aperture trovate | Errore proporzioni aperture |
+|---|---|---|---|---|---|---|---|
+| Informative Drawings, grezzo | 0,880 | 0,976 | 0,037 | 240 | 0,27 | 5/5 | 0,9% |
+| **SDXL, grezzo** | 0,888 | **1,000** | **0,015** | 209 | 0,33 | 5/5 | **0,5%** |
+| SD 1.5, grezzo | 0,871 | 0,955 | 0,154 | 232 | 0,49 | 2/5 | 19,3% |
+| DXF Fotovettore attuale (ID + SAM) | 0,944 | 0,801 | 0,067 | 225 | **0,90** | 4/5 | 6,2% |
+| **DXF SDXL + SAM** | 0,953 | 0,845 | 0,062 | 224 | **0,90** | 4/5 | 6,2% |
+| DXF SDXL + celle del disegno | **0,961** | **0,964** | **0,026** | 249 | 0,48 | 5/5 | 2,9% |
+| DXF ID + celle del disegno | 0,943 | 0,898 | 0,035 | 289 | 0,42 | 5/5 | 5,2% |
+| DXF SD 1.5 + SAM | 0,936 | 0,908 | 0,091 | 226 | 0,90 | 4/5 | 6,2% |
+
+**Osservazioni visive (confronto delle immagini, oltre alle misure)**:
+- Il disegno grezzo di SDXL è il più pulito: tratto uniforme, conci, portali, bifora, archetti, oculi e cornice riconoscibili, poca grana, tratti spuri soprattutto sugli alberi ai lati.
+- SD 1.5 aggiunge campiture scure (cornice, archetti) e una fascia decorativa inventata in basso: **scartato** (resta come opzione nel notebook; predefinito ora `sdxl`).
+- **Senza forme** il motore produce quasi solo tratti aperti (1–5 celle chiuse anche dal disegno SDXL): la chiusura dei contorni nel DXF oggi viene **solo** da MobileSAM. Per questo i DXF "+ SAM" si somigliano tutti. Il vettorizzatore è diventato il collo di bottiglia.
+- "**Celle del disegno**" (nuova funzione `celle_come_forme`: le aree bianche chiuse del disegno passate al motore come forme) dà le misure migliori in assoluto, ma **a vista è peggiore**: celle fuse in grandi poligoni irregolari, archetti pensili deformati, bifora ridotta a due rettangoli. Va letta con "celle rettangolari" 0,48 contro 0,90. È un caso in cui le misure di completezza premiano un disegno meno utilizzabile in CAD: non integrare così.
+
+**Conclusioni (su una sola foto: da confermare su Palazzo e Lisbona)**:
+1. SDXL + ControlNet Union è il candidato da seguire; SD 1.5 no.
+2. Miglioramento sicuro ma piccolo: **SDXL come mappa di tratto al posto di Informative Drawings, con le stesse forme MobileSAM** (completezza 0,80 → 0,85, precisione 0,944 → 0,953, forme invariate).
+3. Il guadagno grande (completezza 0,96, aperture 5/5) richiede un vettorizzatore che chiuda le celle dal disegno **in modo regolare**: per esempio celle del disegno solo dove MobileSAM non ha già una forma, regolarizzate con `regShape` più severo, separando le celle fuse lungo i tratti deboli. È lavoro sul motore, verificabile qui con `rianalizza()` senza GPU.
+4. Nessuna integrazione in `dev/` per ora.
+
+Visto che SDXL non gira nel browser, un'eventuale integrazione passerebbe da un provider "server locale o Colab" (15.6).
 
 ---
 
