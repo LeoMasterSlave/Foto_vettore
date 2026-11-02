@@ -606,3 +606,12 @@ Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.h
 
   A vista dà trattini spezzati: archi e archetti frammentati, conci non chiusi. La precisione alta dipende solo dal fatto che disegna poco. È simile alle versioni classiche v1–v3 di Fotovettore, già giudicate insufficienti dall'utente.
 - **Non adottato.** Spunti riusabili (MIT): il raddrizzamento con 4 angoli (omografia) come funzione futura di Fotovettore, e la regola "snap ortogonale + unione dei collineari con tolleranza di gap", che in parte esiste già nel motore (`straighten`, `mergeLines`).
+
+### 15.12 VTracer nel banco (2/11/2026, richiesto dall'utente)
+
+- VTracer (`github.com/visioncortex/vtracer`, MIT, 1.0.0-alpha.4, API Python `vtracer.Config(...).convert_pixels`). Non è compilabile qui (crates.io e PyPI bloccati): nel notebook si installa con `pip install vtracer==1.0.0a4`. Se l'installazione fallisce, il confronto continua senza VTracer.
+- In `fv_banco.vtracer_forme()` ci sono due varianti, solo sui disegni generati, i cui poligoni vanno al motore come forme al posto di MobileSAM:
+  - `celle`: modalità bw sulle celle bianche, con il tratto ispessito di 1 px; poligoni allargati di 2 px a spigolo vivo verso l'asse del tratto (`allarga_poligono`);
+  - `mosaico`: clustering watershed + cutout sul disegno; si tengono le regioni chiare.
+- **Scoperto e corretto in prova**: il motore (`regShape`) vuole contorni densi. Con i soli vertici dei poligoni dava 25 celle chiuse invece di 222; ora c'è `ricampiona()` a 1 px.
+- Verificato qui **solo con un VTracer finto** (contorni OpenCV codificati come l'SVG compatto di VTracer: comandi relativi, H/V, numeri ".5-3"). Questo verifica il lettore SVG (`_path_poligoni`, testato anche su curve C/S/Q/T) e il collegamento al motore. **Non dice nulla sulla qualità del VTracer vero**: va eseguito su Colab.

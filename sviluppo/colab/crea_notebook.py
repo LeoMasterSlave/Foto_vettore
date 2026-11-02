@@ -51,6 +51,8 @@ if not os.path.isdir(REPO):
 else:
     sh('git -C %s pull --ff-only' % REPO)
 sh('pip install -q "diffusers>=0.32" accelerate onnxruntime pillow-heif')
+if not sh('pip install -q vtracer==1.0.0a4'):  # VTracer (MIT): forme chiuse dai disegni generati
+    print('VTracer non installato: il confronto continua senza le varianti VTracer.')
 if not shutil.which('node'):  # il motore CAD di Fotovettore e' JavaScript
     sh('pip install -q nodejs-wheel')
 print('Node:', subprocess.run(['node', '--version'], capture_output=True, text=True).stdout.strip() or 'NON TROVATO')

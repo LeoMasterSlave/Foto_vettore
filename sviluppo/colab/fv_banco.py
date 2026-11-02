@@ -581,6 +581,189 @@ def celle_come_forme(neurale, amin=0.0002, amax=0.25, cresc=2):
     return out
 
 
+_NUM = r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?'
+
+
+def _path_poligoni(d, passo=1.5):
+    """Percorso SVG -> lista di poligoni (array Nx2), uno per sottopercorso. Gestisce M L H V C S Q T Z in forma
+    assoluta e relativa e i numeri compatti di VTracer (".5", "-3-2"). Le curve vengono campionate ogni ~passo px."""
+    import re
+    tok = re.findall(r'[MmLlHhVvCcSsQqTtZzAa]|' + _NUM, d)
+    polys, cur, start, pts = [], np.zeros(2), np.zeros(2), []
+    prev_c2, prev_q, cmd, i = None, None, None, 0
+
+    def num():
+        nonlocal i
+        v = float(tok[i])
+        i += 1
+        return v
+
+    def chiudi():
+        if len(pts) >= 3:
+            polys.append(np.array(pts, float))
+
+    def campiona(ctrl):
+        n = max(2, int(sum(np.hypot(*(ctrl[k + 1] - ctrl[k])) for k in range(len(ctrl) - 1)) / passo))
+        for t in np.linspace(0, 1, n + 1)[1:]:
+            q = list(ctrl)
+            while len(q) > 1:
+                q = [(1 - t) * q[k] + t * q[k + 1] for k in range(len(q) - 1)]
+            pts.append(q[0].copy())
+
+    while i < len(tok):
+        if re.fullmatch('[A-Za-z]', tok[i]):
+            cmd = tok[i]
+            i += 1
+            if cmd in 'Zz':
+                chiudi()
+                pts, cur = [], start.copy()
+                prev_c2 = prev_q = None
+                continue
+        elif cmd is None:
+            raise ValueError('percorso SVG senza comando iniziale')
+        rel, C = cmd.islower(), cmd.upper()
+        base = cur if rel else np.zeros(2)
+        if C == 'M':
+            chiudi()
+            cur = base + np.array([num(), num()])
+            start, pts = cur.copy(), [cur.copy()]
+            cmd = 'l' if rel else 'L'  # coppie successive = linee
+            prev_c2 = prev_q = None
+        elif C == 'L':
+            cur = base + np.array([num(), num()])
+            pts.append(cur.copy())
+            prev_c2 = prev_q = None
+        elif C == 'H':
+            cur = np.array([(cur[0] if rel else 0) + num(), cur[1]])
+            pts.append(cur.copy())
+            prev_c2 = prev_q = None
+        elif C == 'V':
+            cur = np.array([cur[0], (cur[1] if rel else 0) + num()])
+            pts.append(cur.copy())
+            prev_c2 = prev_q = None
+        elif C in 'CS':
+            c1 = (2 * cur - prev_c2 if prev_c2 is not None else cur.copy()) if C == 'S' else base + np.array([num(), num()])
+            c2 = base + np.array([num(), num()])
+            p = base + np.array([num(), num()])
+            campiona([cur.copy(), c1, c2, p])
+            prev_c2, prev_q, cur = c2, None, p
+        elif C in 'QT':
+            c1 = (2 * cur - prev_q if prev_q is not None else cur.copy()) if C == 'T' else base + np.array([num(), num()])
+            p = base + np.array([num(), num()])
+            campiona([cur.copy(), c1, p])
+            prev_q, prev_c2, cur = c1, None, p
+        else:
+            raise ValueError('comando SVG non gestito: ' + cmd)
+    chiudi()
+    return polys
+
+
+def _svg_poligoni(svg, passo=1.5):
+    """SVG di VTracer -> lista di (colore di riempimento, [poligoni])."""
+    import xml.etree.ElementTree as ET
+    import re
+    root = ET.fromstring(re.sub(r'<\?xml[^>]*\?>', '', svg))
+    out = []
+
+    def visita(el, fill):
+        f = el.get('fill', fill)
+        if el.tag.split('}')[-1] == 'path' and el.get('d'):
+            out.append((f, _path_poligoni(el.get('d'), passo)))
+        for c in el:
+            visita(c, f)
+    visita(root, None)
+    return out
+
+
+def _area(P):
+    return 0.5 * (np.dot(P[:, 0], np.roll(P[:, 1], 1)) - np.dot(P[:, 1], np.roll(P[:, 0], 1)))
+
+
+def ricampiona(P, passo=1.0):
+    """Punti ogni ~passo px lungo il contorno chiuso. Con i soli vertici (poligoni di VTracer) il motore
+    produceva 25 celle chiuse invece di 222 nella prova del 2/11/2026."""
+    P = np.asarray(P, float)
+    out = []
+    for i in range(len(P)):
+        a, b = P[i], P[(i + 1) % len(P)]
+        n = max(1, int(np.hypot(*(b - a)) / passo))
+        out.extend(a + (b - a) * t for t in np.arange(n) / n)
+    return np.array(out)
+
+
+def allarga_poligono(P, d):
+    """Allarga un poligono di d px con giunti a spigolo vivo (mitre, limitati a 2d): i lati restano dritti,
+    a differenza di una dilatazione raster. Serve a riportare il contorno di una cella sull'asse del tratto."""
+    P = np.asarray(P, float)
+    n = len(P)
+    if n < 3 or d == 0:
+        return P
+
+    def offset(s):
+        out = np.empty_like(P)
+        for i in range(n):
+            a, b, c = P[i - 1], P[i], P[(i + 1) % n]
+            e1, e2 = b - a, c - b
+            l1, l2 = np.hypot(*e1), np.hypot(*e2)
+            if l1 < 1e-9 or l2 < 1e-9:
+                out[i] = b
+                continue
+            n1 = s * np.array([e1[1], -e1[0]]) / l1
+            n2 = s * np.array([e2[1], -e2[0]]) / l2
+            m = n1 + n2
+            mm = np.hypot(*m)
+            if mm < 1e-6:
+                out[i] = b + d * n1
+                continue
+            k = d / max(1e-6, (np.dot(m / mm, n1)))
+            out[i] = b + (m / mm) * min(k, 2 * d)
+        return out
+    Q = offset(1.0)
+    return Q if abs(_area(Q)) > abs(_area(P)) else offset(-1.0)
+
+
+def vtracer_forme(neurale, modo='celle', amin=0.0002, amax=0.25):
+    """Forme chiuse da VTracer (MIT, visioncortex) sul disegno, da passare al motore al posto di MobileSAM.
+    modo 'celle': le aree bianche racchiuse dal tratto, ricalcate in modalita' bw (celle nere su fondo bianco).
+    modo 'mosaico': clustering watershed + cutout (mosaico senza fessure) sul disegno; si tengono le regioni chiare.
+    Richiede: pip install vtracer==1.0.0a4"""
+    import vtracer
+    rh, rw = neurale.shape
+    A = rh * rw
+    if modo == 'celle':
+        # tratto bianco (ispessito di 1 px per chiudere i piccoli varchi, come celle_come_forme), celle nere = primo piano
+        ink = cv2.dilate((neurale < 0.5).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+        g = np.where(ink, 255, 0).astype(np.uint8)
+        cfg = vtracer.Config(clustering='bw', hierarchical='stacked', mode='polygon', filter_speckle=4)
+    else:
+        g = np.clip(neurale * 255, 0, 255).astype(np.uint8)
+        cfg = vtracer.Config(clustering='watershed', hierarchical='cutout', mode='polygon', filter_speckle=4,
+                             watershed_detail=192)
+    rgba = np.dstack([g, g, g, np.full_like(g, 255)])
+    svg = cfg.convert_pixels(rgba.tobytes(), rw, rh)
+    forme = []
+    for fill, polys in _svg_poligoni(svg):
+        for P in polys:
+            if len(P) < 4:
+                continue
+            x0, y0 = P.min(0)
+            x1, y1 = P.max(0)
+            if x0 <= 1 or y0 <= 1 or x1 >= rw - 2 or y1 >= rh - 2:
+                continue
+            a = 0.5 * abs(np.dot(P[:, 0], np.roll(P[:, 1], 1)) - np.dot(P[:, 1], np.roll(P[:, 0], 1)))
+            if a < amin * A or a > amax * A:
+                continue
+            m = np.zeros((rh, rw), np.uint8)
+            cv2.fillPoly(m, [np.round(P).astype(np.int32)], 1)
+            if m.sum() == 0 or float(neurale[m > 0].mean()) < 0.6:  # regione di tratto, non una cella
+                continue
+            if modo == 'celle':
+                P = allarga_poligono(P, 2.0)  # dal bordo della cella all'asse del tratto
+            P = ricampiona(P, 1.0)  # il motore (regShape) si aspetta contorni densi come quelli di MobileSAM
+            forme.append([round(float(v), 2) for v in P.ravel()])
+    return forme
+
+
 def controllo_tratto(neurale, segs, size):
     """Immagine di controllo: tratti bianchi su nero (Informative Drawings + segmenti rettilinei della foto)."""
     rh, rw = neurale.shape
@@ -881,6 +1064,16 @@ def _analizza(D, nome_foto, foto_shape, box, reg, ev, neur_id, forme, usa_sam, g
         varianti = [(base if usa_sam else nm + ' (solo linee)', forme)]
         varianti.append(((('Informative Drawings' if nm == 'Fotovettore attuale' else nm)) + ' + celle del disegno',
                          celle_come_forme(neu)))
+        if nm != 'Fotovettore attuale':  # VTracer solo sui disegni generati (richiesta del 2/11/2026)
+            for modo in ('celle', 'mosaico'):
+                try:
+                    t = time.time()
+                    fv = vtracer_forme(neu, modo)
+                    tempi['vtracer_%s_%s_s' % (nm.split()[0], modo)] = round(time.time() - t, 1)
+                    varianti.append((nm + ' + VTracer ' + modo, fv))
+                except Exception as e:
+                    semi_info.setdefault('VTracer', {})['%s %s' % (nm, modo)] = 'errore: %s: %s' % (type(e).__name__, e)
+                    log('  VTracer %s non disponibile: %s' % (modo, e))
         for etichetta, fm in varianti:
             t = time.time()
             r = motore(neu, gray8, fm)
