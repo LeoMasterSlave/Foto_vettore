@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Prova AI – Fotovettore</title>
+<style>
+:root{--bg:#eef1f4;--ink:#17202a;--mut:#5d6b78;--line:#c9d1d8;--card:#fff;--acc:#c8400a}
+@media (prefers-color-scheme:dark){:root{--bg:#10151a;--ink:#e6ebef;--mut:#93a0ac;--line:#2a3641;--card:#18202a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px max(16px,env(safe-area-inset-right)) 40px max(16px,env(safe-area-inset-left))}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;text-transform:uppercase;letter-spacing:.1em;color:var(--mut);margin:0 0 8px}
+p{margin:6px 0}.mut{color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0}
+button,select,input[type=file]{font:inherit;color:var(--ink)}
+button{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:3px 3px 3px 0;cursor:pointer}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button:disabled{opacity:.45}
+canvas{max-width:100%;height:auto;display:block;border:1px solid var(--line);background:#fff;touch-action:none}
+#log{white-space:pre-wrap;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;max-height:220px;overflow:auto}
+textarea{width:100%;height:150px;font:12px ui-monospace,Menlo,monospace;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0}.bar>i{display:block;height:100%;width:0;background:var(--acc)}
+.chips button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+</style></head><body>
+<h1>Prova AI per Fotovettore</h1>
+<p class="mut">Pagina di prova separata: due modelli AI girano nel tuo browser, nessuna foto esce dal dispositivo. Serve per misurare tempi e qualità, soprattutto su iPhone. Fotovettore non viene toccato.</p>
+
+<div class="card">
+<h2>1 · Foto</h2>
+<input id="file" type="file" accept="image/*">
+<p class="mut">Trascina un rettangolo sulla foto per scegliere la zona da analizzare (per esempio solo la facciata). Senza selezione si usa tutta l'immagine.</p>
+<canvas id="sel"></canvas>
+<p><button id="reset">Tutta l'immagine</button>
+Lato lungo di lavoro: <select id="work"><option value="700">700 px (veloce)</option><option value="900" selected>900 px</option><option value="1200">1200 px (lento)</option></select></p>
+</div>
+
+<div class="card">
+<h2>2 · Esegui</h2>
+<button id="runA" class="p" disabled>A · Disegno neurale (18 MB)</button>
+<button id="runB" class="p" disabled>B · Conci / segmentazione (44 MB)</button>
+<button id="stop" disabled>Interrompi</button>
+<div class="bar"><i id="pb"></i></div>
+<div id="log">Scegli una foto per iniziare.</div>
+</div>
+
+<div class="card">
+<h2>3 · Risultato</h2>
+<div class="chips" id="chips">
+<button data-v="photo" aria-pressed="false">Foto</button>
+<button data-v="neural" aria-pressed="false">Disegno neurale</button>
+<button data-v="sam" aria-pressed="false">Conci</button>
+<button data-v="both" aria-pressed="true">Insieme</button>
+<button data-v="over" aria-pressed="false">Conci sulla foto</button>
+</div>
+<canvas id="out" width="10" height="10"></canvas>
+</div>
+
+<div class="card">
+<h2>4 · Report</h2>
+<p class="mut">Copia questo testo e incollalo nella chat: contiene tempi, dispositivo ed errori.</p>
+<textarea id="rep" readonly></textarea>
+<button id="copy">Copia report</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const M_ID='modelli/contour_style_512x512.onnx', M_ENC='modelli/mobilesam-encoder.onnx', M_DEC='modelli/mobilesam-decoder.onnx';
+const R={lines:[],t:{}};
+let img=null, sel=null, drag=null, stopFlag=false, region=null; // region: {canvas(work res), w,h}
+let neural=null, samCv=null;                                    // neural: Float32Array w*h (0 dark ..1 white)
+const logEl=$('log');
+function log(s){R.lines.push(s);logEl.textContent+= (logEl.textContent==='Scegli una foto per iniziare.'?'':'')+'\n'+s;logEl.scrollTop=1e9;report();}
+function setBar(f){$('pb').style.width=(100*Math.min(1,f)).toFixed(1)+'%';}
+function report(){
+  $('rep').value=['Prova AI Fotovettore','UA: '+navigator.userAgent,'ORT: '+(window.ort?ort.env.versions&&ort.env.versions.web||'?':'non caricato'),
+   'Regione: '+(region?region.w+'x'+region.h+' px di lavoro':'-'),'---',...R.lines].join('\n');
+}
+function yieldUI(){return new Promise(r=>setTimeout(r,0));}
+function fmt(ms){return (ms/1000).toFixed(1)+' s';}
+if(!window.ort){log('ERRORE: onnxruntime-web non si è caricato (serve internet per jsDelivr).');}
+else{ort.env.wasm.numThreads=1;ort.env.wasm.proxy=false;}
+
+// ---------- selezione area ----------
+const selCv=$('sel'), sctx=selCv.getContext('2d');
+function drawSel(){
+  if(!img)return; sctx.clearRect(0,0,selCv.width,selCv.height); sctx.drawImage(img,0,0,selCv.width,selCv.height);
+  if(sel){sctx.strokeStyle='#ff3b00';sctx.lineWidth=3;sctx.setLineDash([8,6]);sctx.strokeRect(sel.x,sel.y,sel.w,sel.h);sctx.fillStyle='rgba(255,59,0,.12)';sctx.fillRect(sel.x,sel.y,sel.w,sel.h);}
+}
+function pos(e){const r=selCv.getBoundingClientRect();return {x:(e.clientX-r.left)*selCv.width/r.width,y:(e.clientY-r.top)*selCv.height/r.height};}
+selCv.addEventListener('pointerdown',e=>{if(!img)return;selCv.setPointerCapture(e.pointerId);drag=pos(e);sel={x:drag.x,y:drag.y,w:0,h:0};});
+selCv.addEventListener('pointermove',e=>{if(!drag)return;const p=pos(e);sel={x:Math.min(drag.x,p.x),y:Math.min(drag.y,p.y),w:Math.abs(p.x-drag.x),h:Math.abs(p.y-drag.y)};drawSel();});
+selCv.addEventListener('pointerup',()=>{drag=null;if(sel&&(sel.w<30||sel.h<30))sel=null;drawSel();});
+$('reset').onclick=()=>{sel=null;drawSel();};
+$('file').onchange=async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const u=URL.createObjectURL(f); const im=new Image();
+  im.onload=()=>{img=im;const s=Math.min(1,900/Math.max(im.naturalWidth,im.naturalHeight));selCv.width=Math.round(im.naturalWidth*s);selCv.height=Math.round(im.naturalHeight*s);sel=null;neural=null;samCv=null;R.lines=[];logEl.textContent='Foto caricata: '+im.naturalWidth+'x'+im.naturalHeight+' px.';drawSel();$('runA').disabled=false;$('runB').disabled=false;report();};
+  im.onerror=()=>log('ERRORE: foto non leggibile.');
+  im.src=u;
+};
+function prepRegion(){
+  const sx=sel?sel.x/selCv.width:0, sy=sel?sel.y/selCv.height:0, sw=sel?sel.w/selCv.width:1, sh=sel?sel.h/selCv.height:1;
+  const iw=img.naturalWidth, ih=img.naturalHeight, rw=sw*iw, rh=sh*ih, W0=+$('work').value;
+  const k=Math.min(1,W0/Math.max(rw,rh)); const w=Math.round(rw*k), h=Math.round(rh*k);
+  if(region&&region.key===[sx,sy,sw,sh,w,h].join()) return;
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(img,sx*iw,sy*ih,rw,rh,0,0,w,h);
+  region={canvas:c,w,h,key:[sx,sy,sw,sh,w,h].join()};neural=null;samCv=null;
+  $('out').width=w;$('out').height=h;
+}
+// ---------- caricamento modelli ----------
+async function fetchBuf(url,label){
+  const t=performance.now(); const r=await fetch(url); if(!r.ok)throw new Error('download '+url+' → HTTP '+r.status);
+  const len=+r.headers.get('content-length')||0; const rd=r.body.getReader(); const chunks=[]; let got=0;
+  for(;;){const {done,value}=await rd.read(); if(done)break; chunks.push(value); got+=value.length; if(len)setBar(got/len);}
+  const buf=new Uint8Array(got); let o=0; for(const c of chunks){buf.set(c,o);o+=c.length;}
+  log(label+': scaricato '+(got/1048576).toFixed(1)+' MB in '+fmt(performance.now()-t)); return buf;
+}
+async function makeSession(url,label){
+  const buf=await fetchBuf(url,label); const t=performance.now();
+  const s=await ort.InferenceSession.create(buf,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
+  log(label+': modello pronto in '+fmt(performance.now()-t)); return s;
+}
+function tilePositions(L,T,stride){const a=[];for(let p=0;p<L-T;p+=stride)a.push(p);a.push(Math.max(0,L-T));return [...new Set(a)];}
+function busy(b){$('runA').disabled=b;$('runB').disabled=b;$('stop').disabled=!b;}
+// ---------- A: disegno neurale ----------
+async function runA(){
+  prepRegion(); busy(true); stopFlag=false; setBar(0);
+  try{
+    const w=region.w,h=region.h; log('--- A · disegno neurale su '+w+'x'+h+' px');
+    const sess=await makeSession(M_ID,'contour'); const T=Math.min(360,w,h), stride=Math.round(T*0.7);
+    const xs=tilePositions(w,T,stride), ys=tilePositions(h,T,stride); const acc=new Float32Array(w*h), wt=new Float32Array(w*h);
+    const han=new Float32Array(T);for(let i=0;i<T;i++)han[i]=0.5-0.5*Math.cos(2*Math.PI*(i+1)/(T+1));
+    const tc=document.createElement('canvas');tc.width=tc.height=512;const tx=tc.getContext('2d',{willReadFrequently:true});tx.imageSmoothingQuality='high';
+    const oc=document.createElement('canvas');oc.width=oc.height=T;const ox=oc.getContext('2d',{willReadFrequently:true});
+    let n=0,N=xs.length*ys.length; const t0=performance.now();
+    for(const y of ys)for(const x of xs){
+      if(stopFlag)throw new Error('interrotto');
+      tx.drawImage(region.canvas,x,y,T,T,0,0,512,512); const d=tx.getImageData(0,0,512,512).data; const inp=new Float32Array(3*512*512);
+      for(let i=0;i<512*512;i++){inp[i]=d[4*i];inp[512*512+i]=d[4*i+1];inp[2*512*512+i]=d[4*i+2];}
+      const tt=performance.now(); const out=await sess.run({[sess.inputNames[0]]:new ort.Tensor('float32',inp,[1,3,512,512])});
+      const o=out[sess.outputNames[0]].data; // 512x512, 1=bianco
+      const id=ox.createImageData(512,512);
+      // ridimensiona a TxT con canvas
+      const c512=document.createElement('canvas');c512.width=c512.height=512;const x512=c512.getContext('2d');const im512=x512.createImageData(512,512);
+      for(let i=0;i<512*512;i++){const v=Math.max(0,Math.min(255,o[i]*255));im512.data[4*i]=im512.data[4*i+1]=im512.data[4*i+2]=v;im512.data[4*i+3]=255;}
+      x512.putImageData(im512,0,0); ox.drawImage(c512,0,0,T,T); const rd=ox.getImageData(0,0,T,T).data;
+      for(let j=0;j<T;j++)for(let i=0;i<T;i++){const wv=han[i]*han[j]+1e-3, p=(y+j)*w+x+i; acc[p]+=rd[4*(j*T+i)]/255*wv; wt[p]+=wv;}
+      n++; setBar(n/N); if(n===1)log('primo riquadro: '+fmt(performance.now()-tt)+' ('+N+' riquadri)'); await yieldUI();
+    }
+    neural=new Float32Array(w*h);for(let i=0;i<w*h;i++)neural[i]=wt[i]?acc[i]/wt[i]:1;
+    R.t.A=performance.now()-t0; log('A completato in '+fmt(R.t.A)+' · '+N+' riquadri'); if(sess.release)await sess.release();
+    setView('neural');
+  }catch(e){log('ERRORE A: '+(e&&e.message||e));}
+  busy(false);
+}
+// ---------- B: conci (MobileSAM) ----------
+async function runB(){
+  prepRegion(); busy(true); stopFlag=false; setBar(0);
+  try{
+    const w=region.w,h=region.h; log('--- B · conci su '+w+'x'+h+' px');
+    const enc=await makeSession(M_ENC,'encoder'); const dec=await makeSession(M_DEC,'decoder');
+    const T=Math.min(360,w,h), stride=Math.round(T*0.75), G=18;
+    const xs=tilePositions(w,T,stride), ys=tilePositions(h,T,stride);
+    const cover=new Uint8Array(w*h), tried=new Uint8Array(w*h);
+    samCv=document.createElement('canvas');samCv.width=w;samCv.height=h;const sx=samCv.getContext('2d');sx.fillStyle='#000';
+    const tc=document.createElement('canvas');tc.width=tc.height=1024;const tx=tc.getContext('2d',{willReadFrequently:true});tx.imageSmoothingQuality='high';
+    const mean=[123.675,116.28,103.53],std=[58.395,57.12,57.375];
+    const zeros=new Float32Array(256*256), hasM=new Float32Array([0]), osz=new Float32Array([256,256]);
+    let nTiles=0,NT=xs.length*ys.length,decoded=0,masks=0; const t0=performance.now(); let tEnc=0,tDec=0;
+    for(const ty of ys)for(const tx0 of xs){
+      if(stopFlag)throw new Error('interrotto');
+      tx.drawImage(region.canvas,tx0,ty,T,T,0,0,1024,1024); const d=tx.getImageData(0,0,1024,1024).data; const inp=new Float32Array(3*1024*1024);
+      for(let i=0;i<1024*1024;i++){inp[i]=(d[4*i]-mean[0])/std[0];inp[1024*1024+i]=(d[4*i+1]-mean[1])/std[1];inp[2*1024*1024+i]=(d[4*i+2]-mean[2])/std[2];}
+      let tt=performance.now(); const eo=await enc.run({[enc.inputNames[0]]:new ort.Tensor('float32',inp,[1,3,1024,1024])}); tEnc+=performance.now()-tt;
+      const emb=eo[enc.outputNames[0]]; const sc=1024/T;
+      const pts=[];for(let a=0;a<G;a++)for(let b=0;b<G;b++)pts.push([tx0+(0.03+0.94*b/(G-1))*T+(Math.random()*8-4),ty+(0.03+0.94*a/(G-1))*T+(Math.random()*8-4)]);
+      for(let i=pts.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[pts[i],pts[j]]=[pts[j],pts[i]];}
+      for(const [px,py] of pts){
+        if(stopFlag)throw new Error('interrotto');
+        const xi=Math.max(0,Math.min(w-1,px|0)), yi=Math.max(0,Math.min(h-1,py|0)); if(cover[yi*w+xi]||tried[yi*w+xi])continue;
+        for(let yy=Math.max(0,yi-6);yy<=Math.min(h-1,yi+6);yy++)for(let xx=Math.max(0,xi-6);xx<=Math.min(w-1,xi+6);xx++)tried[yy*w+xx]=1;
+        tt=performance.now();
+        const o=await dec.run({image_embeddings:emb,point_coords:new ort.Tensor('float32',new Float32Array([(px-tx0)*sc,(py-ty)*sc,0,0]),[1,2,2]),point_labels:new ort.Tensor('float32',new Float32Array([1,-1]),[1,2]),mask_input:new ort.Tensor('float32',zeros,[1,1,256,256]),has_mask_input:new ort.Tensor('float32',hasM,[1]),orig_im_size:new ort.Tensor('float32',osz,[2])});
+        tDec+=performance.now()-tt; decoded++;
+        const iou=o.iou_predictions.data[0]; if(iou<0.75)continue; const low=o.low_res_masks.data;
+        let area=0,bord=0; for(let i=0;i<65536;i++)if(low[i]>0){area++; const r=i>>8,c=i&255; if(r===0||r===255||c===0||c===255)bord++;}
+        if(area<94||area>16384||bord>3)continue;
+        // dedupe: quanta parte è già coperta
+        let cov=0,tot=0; const k=T/256;
+        for(let j=0;j<T;j++){const r=Math.min(255,(j/k)|0);for(let i=0;i<T;i++){const c=Math.min(255,(i/k)|0);if(low[r*256+c]>0){tot++;if(cover[(ty+j)*w+tx0+i])cov++;}}}
+        if(tot&&cov/tot>0.7)continue;
+        for(let j=0;j<T;j++){const r=Math.min(255,(j/k)|0);for(let i=0;i<T;i++){const c=Math.min(255,(i/k)|0);if(low[r*256+c]>0)cover[(ty+j)*w+tx0+i]=1;}}
+        for(let r=1;r<255;r++)for(let c=1;c<255;c++){const p=r*256+c;if(low[p]>0&&(low[p-1]<=0||low[p+1]<=0||low[p-256]<=0||low[p+256]<=0))sx.fillRect(tx0+c*k,ty+r*k,1.6,1.6);}
+        masks++; if(masks%5===0)await yieldUI();
+      }
+      nTiles++; setBar(nTiles/NT); log('riquadro '+nTiles+'/'+NT+' · conci '+masks+' · decodifiche '+decoded); await yieldUI();
+    }
+    R.t.B=performance.now()-t0; log('B completato in '+fmt(R.t.B)+' · conci trovati '+masks+' · encoder '+fmt(tEnc)+' · decoder '+fmt(tDec)+' ('+(tDec/Math.max(1,decoded)).toFixed(0)+' ms/punto)');
+    if(enc.release)await enc.release(); if(dec.release)await dec.release();
+    setView('both');
+  }catch(e){log('ERRORE B: '+(e&&e.message||e));}
+  busy(false);
+}
+// ---------- visualizzazione ----------
+let view='both';
+function setView(v){view=v;document.querySelectorAll('#chips button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===v)));draw();}
+function draw(){
+  if(!region)return; const c=$('out'),x=c.getContext('2d'); c.width=region.w;c.height=region.h; x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+  const nc=()=>{if(!neural)return null;const k=document.createElement('canvas');k.width=region.w;k.height=region.h;const kx=k.getContext('2d'),id=kx.createImageData(region.w,region.h);for(let i=0;i<neural.length;i++){const v=Math.max(0,Math.min(255,neural[i]*255));id.data[4*i]=id.data[4*i+1]=id.data[4*i+2]=v;id.data[4*i+3]=255;}kx.putImageData(id,0,0);return k;};
+  if(view==='photo'||view==='over')x.drawImage(region.canvas,0,0);
+  if(view==='neural'||view==='both'){const k=nc();if(k){x.globalAlpha=view==='both'?0.35:1;x.drawImage(k,0,0);x.globalAlpha=1;}}
+  if((view==='sam'||view==='both'||view==='over')&&samCv){if(view==='over'){const t=document.createElement('canvas');t.width=samCv.width;t.height=samCv.height;const tx=t.getContext('2d');tx.drawImage(samCv,0,0);tx.globalCompositeOperation='source-in';tx.fillStyle='#ff2200';tx.fillRect(0,0,t.width,t.height);x.drawImage(t,0,0);}else x.drawImage(samCv,0,0);}
+}
+document.querySelectorAll('#chips button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+$('runA').onclick=runA;$('runB').onclick=runB;$('stop').onclick=()=>{stopFlag=true;};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('rep').value);$('copy').textContent='Copiato';}catch(e){$('rep').select();$('copy').textContent='Seleziona e copia a mano';}};
+window.addEventListener('error',e=>log('ERRORE pagina: '+e.message));
+window.addEventListener('unhandledrejection',e=>log('ERRORE: '+(e.reason&&e.reason.message||e.reason)));
+report();
+})();
+</script>
+</body></html>
