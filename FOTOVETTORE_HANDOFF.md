@@ -535,6 +535,34 @@ Foto dell'utente: facciata romanica in conci, con 2 portali ad arco, finestra mo
 
 Visto che SDXL non gira nel browser, un'eventuale integrazione passerebbe da un provider "server locale o Colab" (15.6).
 
+### 15.9 Seconda prova su Colab (2/11/2026): IMG_7782 e Lisbona
+
+Due foto nuove eseguite dall'utente col banco già corretto:
+- **IMG_7782**: stessa chiesa di IMG_7781, altro scatto;
+- **Lisbona** (file "WhatsApp Image 2026-11-02 at 15.08.05"): palazzo intonacato con finestre, balconi e portone. È la foto di riferimento "Lisbona" (sezione 8.1), ricevuta via WhatsApp.
+
+**Tempi**: totale 7,7 min e 8,3 min. Con i modelli già in cache il caricamento scende a circa 42 s per SDXL e 25 s per SD 1.5; SDXL 33–41 s per variante.
+
+**Secondo problema di soglia, corretto**: su Lisbona SDXL disegna linee chiarissime (solo 5–10% più scure della carta). `normalizza_disegno()` ora alza la soglia fino al 15% dei pixel più scuri (tra 0,82 e 0,95 del rapporto con la carta). Su Lisbona la completezza del grezzo passa da 0,49 a 0,89; sulle foto della chiesa la soglia resta circa 0,82. Tutte e tre le foto sono state rianalizzate con `rianalizza()`.
+
+**DXF, risultati principali (rianalisi finale)**:
+
+| Foto | Metodo | Precisione | Completezza | Inventate | Celle rettangolari |
+|---|---|---|---|---|---|
+| IMG_7781 | attuale (ID + SAM) | 0,944 | 0,801 | 0,067 | 0,90 |
+| IMG_7781 | **SDXL + SAM** | 0,953 | 0,845 | 0,062 | 0,90 |
+| IMG_7782 | attuale (ID + SAM) | 0,948 | 0,802 | 0,084 | 0,92 |
+| IMG_7782 | **SDXL + SAM** | 0,955 | 0,898 | 0,052 | 0,92 |
+| Lisbona, solo facciata (senza auto, strada e bordi) | attuale (ID + SAM) | 0,953 | 0,652 | 0,031 | 0,74 |
+| Lisbona, solo facciata | **SDXL + SAM** | 0,937 | 0,662 | 0,062 | 0,74 |
+
+- Su Lisbona la misura su tutto il riquadro (completezza 0,67 contro 0,72) penalizza SDXL perché il riquadro automatico include auto, strada ed edifici vicini, che SDXL giustamente non disegna. Misurata solo sulla facciata è parità. Anche a vista i due DXF sono quasi uguali: le forme vengono da MobileSAM.
+- **A vista il disegno grezzo SDXL è nettamente migliore su Lisbona**: finestre, ringhiere, balconi e portone puliti, nessuna auto, niente rumore sui palazzi vicini. Il motore però non sfrutta questa qualità.
+- SD 1.5: su IMG_7782 e Lisbona è simile a SDXL, su IMG_7781 molto peggiore (campiture, aperture sbagliate). Resta scartato per instabilità.
+- Le misure di aperture e archi su Lisbona non funzionano: le finestre su facciata bianca non risultano "scure" (riferimento di consenso vuoto). Limite noto della misura, da rivedere per le facciate intonacate.
+
+**Conclusione su tre foto**: SDXL + SAM migliora o pareggia sempre (completezza +4 e +10 punti sulla chiesa, parità su Lisbona) con forme identiche. Il guadagno grande resta bloccato dal vettorizzatore, che non chiude contorni dalle linee: il prossimo lavoro è sul motore (15.8, punto 3), misurabile qui sulle tre serie salvate senza GPU.
+
 ---
 
 ## Prompt per la nuova chat

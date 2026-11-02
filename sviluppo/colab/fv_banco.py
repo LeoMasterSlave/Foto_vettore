@@ -549,11 +549,14 @@ def _dims(rw, rh, lato, mult=64):
 def normalizza_disegno(g):
     """Mappa di tratto 0..1 (0 = linea) da un disegno generato. I modelli di diffusione disegnano spesso linee grigie
     su carta grigia (SDXL: carta ~220, linee 90-160): una soglia fissa a 128 perde gran parte del tratto.
-    Si stima la carta localmente (chiusura 15 px + sfocatura) e si usa il contrasto relativo:
-    tratto = almeno ~18% piu' scuro della carta circostante (valore 0.5 della mappa)."""
+    Si stima la carta localmente (chiusura 15 px + sfocatura) e si usa il contrasto relativo: tratto = almeno ~18%
+    piu' scuro della carta circostante; se il disegno e' molto chiaro (Lisbona: linee solo 5-10% piu' scure),
+    la soglia sale fino al 15% dei pixel piu' scuri, con un minimo del 5% di contrasto (valore 0.5 della mappa)."""
     g = np.asarray(g, np.float32)
     bg = cv2.GaussianBlur(cv2.morphologyEx(g, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8)), (0, 0), 5)
-    return np.clip((g / np.maximum(bg, 1.0) - 0.64) / 0.36, 0, 1)
+    r = g / np.maximum(bg, 1.0)
+    t = float(np.clip(np.percentile(r, 15), 0.82, 0.95))
+    return np.clip((r - t) / 0.36 + 0.5, 0, 1)
 
 
 def celle_come_forme(neurale, amin=0.0002, amax=0.25, cresc=2):
