@@ -2,7 +2,7 @@
 
 Stato al 2 novembre 2026. Questo documento permette di riprendere il progetto in una nuova conversazione senza rispiegare nulla. Distingue sempre ciò che è stato **verificato** (eseguito e misurato) da ciò che è **ipotesi** o **non verificato**.
 
-Repository: `https://github.com/LeoMastersSlave/Foto_vettore` (in alcune risposte di GitHub compare anche la grafia `LeoMasterSlave/foto_vettore`: GitHub ha segnalato che il repository è stato spostato su `LeoMastersSlave/Foto_vettore`).
+Repository: `https://github.com/LeoMastersSlave/Foto_vettore` (in alcune risposte di GitHub compare anche la grafia `LeoMasterSlave/foto_vettore`: GitHub ha segnalato che il repository è stato spostato su `LeoMastersSlave/Foto_vettore`). Nota del 2/11/2026, seconda sessione: `https://github.com/LeoMasterSlave/Foto_vettore` si apre senza reindirizzamenti e il clone/push funziona con `LeoMasterSlave/foto_vettore`; il notebook Colab usa quindi `LeoMasterSlave/Foto_vettore`. Lo spostamento su `LeoMastersSlave` non è stato confermato.
 Sito GitHub Pages: `https://leomastersslave.github.io/Foto_vettore/` (versione pubblicata), `…/Foto_vettore/dev/` (versione di sviluppo), `…/Foto_vettore/prova-ai/` (pagina di prova dei modelli).
 
 ---
@@ -34,8 +34,9 @@ Traguardo rispetto a PhotoCAD: avvicinarsi alla sua pulizia (ogni concio come co
 | Pagina di prova AI | `prova-ai/index.html` | Esegue i due modelli AI e mostra i risultati grezzi (nessun DXF) | **Verificata dall'utente su iPhone** (tempi nella sezione 8). |
 | Sviluppo (v4) | `dev/index.html` | App completa: AI integrata (modalità Dettagliata, Rapida, Classica), nuova interfaccia, correzione, DXF a 4 livelli | Pubblicata il 2/11/2026. **Testata solo in Chromium automatico**; non ancora provata dall'utente su iPhone. |
 | Sorgenti e strumenti | `sviluppo/` | Sorgenti separati di `dev/index.html`, script di build e di test | Aggiunti il 2/11/2026. |
+| Banco di prova dei modelli generativi | `sviluppo/colab/` | Notebook Google Colab: confronta Fotovettore attuale, SDXL + ControlNet Union, SD 1.5 + ControlNet Lineart e PhotoCAD (file dell'utente) con misure geometriche e DXF dallo stesso motore | Aggiunto il 2/11/2026 (sezione 15). **Mai eseguito su Colab né con i modelli generativi**: verificate qui solo le parti senza GPU. |
 
-Il prossimo passo atteso è che l'utente apra `…/Foto_vettore/dev/` su iPhone e mandi la riga "Prestazioni" che si trova in "Impostazioni avanzate".
+Prossimi passi attesi: (a) l'utente esegue il notebook Colab sulle due foto di riferimento e manda `risultati_fotovettore.zip` (sezione 15); (b) apre `…/Foto_vettore/dev/` su iPhone e manda la riga "Prestazioni" che si trova in "Impostazioni avanzate".
 
 ---
 
@@ -61,6 +62,12 @@ sviluppo/
   src/style.css            stile (token chiaro/scuro, layout iPhone/desktop)
   src/body.html            markup dell'interfaccia
   strumenti/               script di test e misura (sezione 11)
+  colab/                   banco di prova dei modelli generativi (sezione 15); non fa parte dell'app
+    Fotovettore_confronto_modelli.ipynb   notebook Colab (GENERATO: non modificare a mano)
+    crea_notebook.py       genera il notebook
+    fv_banco.py            logica: modelli, motore, misure, DXF, rapporto
+    motore.js              ponte Node verso src/engine.js (senza modificarlo)
+    README.md              istruzioni e limiti
   .gitignore               esclude strumenti/dati/ e .check.js
 FOTOVETTORE_HANDOFF.md     questo documento
 ```
@@ -361,6 +368,10 @@ Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei mo
 - **Rete del container** (osservato il 2/11/2026):
   - raggiungibili `github.com` (clone e download di release);
   - bloccati PyPI, npm, Hugging Face, jsDelivr, unpkg, cdnjs e photocad.ai (solo via WebFetch per le pagine pubbliche).
+  - Ricontrollato il 2/11/2026 (seconda sessione): il proxy risponde **403 al CONNECT** verso `huggingface.co`, `hf.co`, `cdn-lfs.huggingface.co`, `raw.githubusercontent.com`, `modelscope.cn`, `gitlab.com`, `codeberg.org`, `zenodo.org`, PyPI, npm e le CDN. È una policy dell'ambiente: non si risolve con token, skill o connettori. Niente GPU né PyTorch nel container.
+  - **Git LFS** di repository pubblici non collegati con credenziali (per esempio `opencv/opencv_zoo`, che contiene DexiNed ONNX) **non** viene servito: si ottiene solo il puntatore. Per i modelli in LFS serve che l'utente scarichi il file e lo alleghi, oppure Colab.
+  - Esiste un connettore MCP ufficiale **Hugging Face** (ricerca di modelli, dataset, Spaces, documentazione), non collegato all'account dell'utente. Non scarica pesi nell'ambiente; utile solo per ricerca e verifica di licenze. Usare gli Spaces per elaborare foto vorrebbe dire inviarle a terzi: escluso salvo richiesta esplicita dell'utente.
+  - Per eseguire modelli generativi si usa **Google Colab gratuito** (decisione dell'utente del 2/11/2026), non il computer dell'utente.
   - Già installati: Python con numpy, onnxruntime 1.29, opencv, scikit-image, PIL; Node 22.23.4; Playwright con Chromium.
 - **Skill usate**:
   - `apple-design` di Emil Kowalski (MIT, `github.com/emilkowalski/skills/tree/main/skills/apple-design`), proposta all'utente come skill "apple-fluid-web-design";
@@ -382,7 +393,7 @@ Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei mo
 5. **Riprove automatiche di qualità** con metriche oggettive.
 6. **Desktop**: risoluzione 1200–1600 e backend WebGPU, con test reali.
 7. **Falsi archi e ringhiere**: regole più severe; i balconi come forme aperte o semplificate.
-8. Modello generativo di line art più forte, solo se gratuito, locale e con pesi disponibili; da testare sulle due foto prima di integrarlo.
+8. **Modelli generativi (avviato, sezione 15)**: eseguire il notebook Colab sulle due foto, analizzare lo zip, decidere con dati alla mano se e come integrare (sezione 15.7). Prima di integrare va dimostrato con i confronti che il risultato migliora rispetto alla versione attuale.
 9. Calibrazione a due punti (misura nota) nell'esportazione; opzione DXF R2000 con LWPOLYLINE.
 10. Quando l'utente approva: passaggio della dev a `index.html` e aggiornamento del README.
 
@@ -398,6 +409,92 @@ Parametri dell'indirizzo: `?ort=<url di ort.min.js>` e `?models=<cartella dei mo
 - ONNX Runtime Web 1.21.0: `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js`
 - REA: `https://github.com/morluto/rea`
 - Skill Apple: `https://github.com/emilkowalski/skills/tree/main/skills/apple-design`, `https://github.com/dickwu/apple-design-skill`
+- Modelli generativi e licenze (sezione 15): `https://huggingface.co/xinsir/controlnet-union-sdxl-1.0` (Apache-2.0), `https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0` (CreativeML Open RAIL++-M), `https://huggingface.co/madebyollin/sdxl-vae-fp16-fix` (MIT), `https://huggingface.co/lllyasviel/control_v11p_sd15_lineart` (CreativeML OpenRAIL-M), `https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5` (CreativeML OpenRAIL-M); API diffusers `https://huggingface.co/docs/diffusers/v0.33.1/api/pipelines/controlnet_union`; indici dei controlli Union `https://siliconflow.github.io/BizyAir/controlnet-union/introduce.html`
+- Esclusi (sezione 15.3): FLUX.1 Kontext dev `https://bfl.ai/blog/flux-1-kontext-dev`; Qwen-Image-Edit-2509 4 bit `https://huggingface.co/ovedrive/Qwen-Image-Edit-2509-4bit`; DexiNed in OpenCV Zoo `https://github.com/opencv/opencv_zoo/tree/main/models/edge_detection_dexined`
+
+---
+
+## 15. Direzione dal 2/11/2026 e banco di prova dei modelli generativi
+
+### 15.1 Direzione decisa dall'utente
+
+- Priorità: **gratuito e open source**. Nessuna API a pagamento (OpenAI, Claude o altri) per ora, nessuna chiave nel sito.
+- **Qualità prima della velocità**: si può aspettare, purché la conversione finisca e il risultato sia valido (disegno completo, geometricamente fedele, DXF modificabile in AutoCAD).
+- Il motore CAD attuale resta (layer, archi con bulge, DXF R12). La pipeline attuale resta come alternativa funzionante. Si procede in modo incrementale.
+- Non limitarsi a rilevatori di bordi: cercare modelli che **ridisegnino** la facciata. Non serve che girino su iPhone.
+- Prima di integrare un modello: **confronti concreti** sulle foto già usate (completezza, conci, aperture, archi, fedeltà geometrica). Un risultato gradevole non è una prova di fedeltà.
+- Futuro: possibile modalità "AI avanzata" opzionale tramite provider esterno, **mai necessaria** per usare il programma. Architettura modulare per non riscrivere (15.6).
+- Ambiente per i modelli pesanti: **Google Colab gratuito**.
+
+### 15.2 Modelli scelti e perché
+
+Criterio: il modello deve **generare un disegno al tratto coerente** (non solo bordi), con pesi pubblici scaricabili, licenza compatibile e memoria compatibile con Colab gratuito (di norma GPU T4 da circa 15 GB e circa 12 GB di RAM; Google non garantisce il tipo di GPU).
+
+| Candidato | Come ridisegna | Licenze | Memoria (stima, non misurata) |
+|---|---|---|---|
+| **SDXL base 1.0 + ControlNet Union (xinsir)** + VAE fp16-fix | testo-immagine guidato da un'immagine di controllo "tratto" (modo 3 = canny/lineart/mlsd), 1024 px | SDXL: CreativeML Open RAIL++-M; Union: Apache-2.0; VAE: MIT | fp16 circa 10–12 GB VRAM su T4; download circa 10 GB |
+| **SD 1.5 + ControlNet 1.1 Lineart** | stesso principio, 768 px | CreativeML OpenRAIL-M (entrambi) | circa 4–5 GB VRAM; download circa 3 GB |
+
+- L'immagine di controllo è il disegno di **Informative Drawings** (già in Fotovettore) più i **segmenti rettilinei lunghi** della foto (LSD di OpenCV), bianco su nero. La diffusione ripulisce, chiude e uniforma i tratti, mentre il controllo tiene la geometria al suo posto.
+- Ogni disegno generato passa dallo **stesso motore CAD** (`runAI` di `engine.js`, al posto della mappa di Informative Drawings, con o senza le forme MobileSAM), quindi si ottengono DXF a 4 layer direttamente confrontabili.
+- Per ogni modello si generano più varianti (semi) e si tiene la migliore secondo le misure: una "riprova di qualità" come quella di PhotoCAD (9.2).
+- SD 1.5 è più debole, ma è l'unico con una strada plausibile verso il browser in futuro (WebGPU). SDXL è il candidato di qualità per una modalità "computer potente".
+- Le licenze RAIL consentono l'uso, anche commerciale, con restrizioni d'uso da rispettare e da riportare. Vanno rilette prima di distribuire pesi o integrarli.
+
+### 15.3 Esclusi (verificato dalle pagine ufficiali o dei modelli)
+
+- **FLUX.1 Kontext [dev]**: 12 miliardi di parametri, licenza **FLUX.1 Non-Commercial** (uso commerciale solo a pagamento). Incompatibile con l'obiettivo "gratuito e open source"; troppo pesante per T4.
+- **Qwen-Image-Edit-2509** (Apache-2.0): anche quantizzato a 4 bit l'autore indica circa 20 GB di VRAM. Non affidabile su Colab gratuito. Da riconsiderare con GPU più grandi.
+- **DexiNed** (MIT, ONNX 47 MB in OpenCV Zoo): è un rilevatore di bordi, non ridisegna; inoltre i pesi stanno in Git LFS, non scaricabile da qui. Escluso per scelta dell'utente ("non un altro rilevatore di bordi").
+- **InstructPix2Pix e simili**: nota la scarsa fedeltà geometrica nelle modifiche globali (non testato qui).
+
+### 15.4 Misure geometriche (`fv_banco.py`)
+
+Tutte calcolate sulla regione a 900 px, rispetto alla **foto**, sia sul disegno grezzo sia sul vettoriale (il raster del DXF):
+
+- `precisione_tratto`: quota del tratto (scheletro) entro r = max(2 px, 0,4% della diagonale) da un bordo della foto (Canny con soglie relative più segmenti LSD lunghi). Linee inventate la fanno scendere.
+- `scarto_mediano_px`: distanza mediana tratto–bordo (proporzioni e posizioni).
+- `completezza_strutturale`: quota, pesata per lunghezza, dei segmenti rettilinei lunghi della foto (≥ 4% della diagonale) coperti al 70% dal disegno.
+- `linee_lunghe_inventate`: quota, pesata per lunghezza, dei segmenti lunghi del disegno senza riscontro nella foto.
+- Celle chiuse: `aperture` (interno scuro nella foto, convesse), `archi` (convesse, profilo superiore circolare: freccia > 12% della larghezza, cerchio di Kåsa con residuo < 5%, altezza ≥ 0,6 × larghezza).
+- `aperture_*` / `archi_*`: confronto con un **riferimento di consenso**, cioè gli elementi visti da almeno due disegni grezzi indipendenti (Informative Drawings, generativi, PhotoCAD se fornito), con IoU ≥ 0,5. Si misurano richiamo, precisione, IoU, errore larghezza/altezza ed errore di posizione. **Limite**: il consenso non è una verità; i generativi sono condizionati da Informative Drawings, quindi non del tutto indipendenti.
+- PhotoCAD: allineamento automatico (foto intera o solo riquadro, margine 0–6%, poi affinamento ECC affine). Approssimato: va controllata la sovrapposizione.
+
+### 15.5 Verificato qui il 2/11/2026 (senza GPU e senza i modelli generativi)
+
+Su una **facciata sintetica** con geometria nota (conci, 3 finestre, 2 portali ad arco, fascia marcapiano), con un "candidato finto" al posto della diffusione:
+
+- percorso completo: riquadro automatico di `engine.js` tramite Node, Informative Drawings, MobileSAM (146 forme in 106 s su 2 core), motore con e senza SAM, DXF, rilettura con `dxfrender.py`, misure, immagini, rapporto HTML, CSV e JSON;
+- il **notebook stesso** eseguito cella per cella con moduli Colab e torch simulati (opzione "solo Fotovettore attuale"): zip prodotto;
+- scelta del seme: la variante spostata di 25 px è stata scartata (punteggio 1,01 contro 1,50);
+- verso degli archi nel campionamento dei bulge: il 95% dei punti degli archi cade sul disegno, contro il 48% con bulge invertito;
+- risposta delle misure: sul disegno pulito 5 aperture e 2 archi (corretti); con 6 linee false le linee inventate passano da 0 a 0,14; con l'altezza deformata del 10% la precisione passa da 1,00 a 0,65 e lo scarto da 0,95 a 1,91 px; con metà disegno mancante la completezza passa da 0,99 a 0,44;
+- allineamento di un finto PhotoCAD (bordi della foto intera su una pagina con margine del 4%): trovato "foto intera", F = 1,0, ECC riuscito.
+
+**Non verificato**: esecuzione su Colab reale, download dei modelli, memoria e tempi su T4, qualità dei disegni SDXL/SD 1.5, il ripiego `nodejs-wheel` se Colab non avesse Node, la lettura di DXF e SVG PhotoCAD (`ezdxf`, `cairosvg`), il comportamento su foto reali.
+
+### 15.6 Architettura modulare per i provider (progetto, non ancora nel codice dell'app)
+
+Il notebook dimostra il contratto: **qualunque provider produce una "mappa di tratto" della regione** (Float32 rw×rh, 0 = linea, 1 = bianco) e, facoltativamente, **forme chiuse** (poligoni in pixel di regione). Tutto il resto (vettorizzazione, livelli, archi, DXF, correzione) resta nel motore CAD esistente. Proposta per `dev/`, quando servirà:
+
+```
+provider = {
+  id, nome, licenza, locale: true|false, costo: 'gratuito'|'a consumo',
+  disponibile(): Promise<bool>,                 // es. WebGPU presente, server locale attivo, chiave inserita dall'utente
+  esegui({rgba, W, H, regione, dettaglio}, onProgress, signal) -> {neural: Float32Array, polys?: Float32Array[]}
+}
+```
+
+- Provider gratuiti: `informative-drawings+mobilesam` (attuale, browser), in futuro `sd15-lineart` (WebGPU) oppure un **server locale o Colab** dell'utente (indirizzo inserito a mano, nessun costo).
+- Provider esterni a pagamento (OpenAI, Claude o altri): solo **opzionali**, attivati dall'utente con la **propria chiave inserita nel browser e mai salvata nel repository o nel sito**, con avviso esplicito che la foto lascia il dispositivo. Non implementati.
+- Il motore CAD non cambia: cambia solo da dove arriva `neural`. Il notebook usa già questo schema (`fb.motore(neurale, gray, forme)`).
+
+### 15.7 Prossimi passi
+
+1. L'utente apre il notebook su Colab, carica Palazzo e Lisbona (e, se vuole, le proprie conversioni PhotoCAD delle stesse foto) e manda `risultati_fotovettore.zip`.
+2. Analisi: misure, sovrapposizioni e DXF in AutoCAD. Integrare solo se un candidato migliora in modo misurabile completezza, aperture e archi **senza** peggiorare precisione e linee inventate.
+3. Se SDXL vince ma SD 1.5 no: modalità "server locale/Colab" come provider gratuito facoltativo. Se vince SD 1.5: valutare la conversione ONNX/WebGPU per il browser (desktop).
+4. Regolazioni possibili nel notebook: `FORZA_CONTROLLO`, `SEMI`, `PASSI`, prompt in `fv_banco.PROMPT`/`NEGATIVO`.
 
 ---
 
@@ -412,7 +509,8 @@ Sto sviluppando Fotovettore, una web app gratuita e locale (anche su iPhone) che
 2. Leggi per intero FOTOVETTORE_HANDOFF.md nella radice: contiene obiettivi, architettura, pipeline, modelli, test, decisioni, limiti e roadmap. Considera verificato solo ciò che il documento indica come tale.
 3. Controlla lo stato del repository: git log (l'ultimo lavoro documentato è il commit che aggiunge FOTOVETTORE_HANDOFF.md e la cartella sviluppo/), la presenza di index.html (versione pubblicata, da non toccare), dev/index.html, sviluppo/src/*, sviluppo/strumenti/* e prova-ai/modelli/*.onnx. Rigenera dev/index.html con python3 sviluppo/build.py e verifica che non cambi rispetto al commit (git diff).
 4. Verifica cosa raggiunge il tuo ambiente (GitHub, PyPI, npm, CDN) prima di pianificare.
-5. Riprendi dalla sezione 13 del documento: il primo passo è verificare la versione dev su iPhone. Chiedimi la riga "Prestazioni" da Impostazioni avanzate e gli eventuali errori dopo una conversione su https://leomastersslave.github.io/Foto_vettore/dev/, poi correggi ciò che emerge.
+5. Leggi la sezione 15 (direzione: gratuito e open source, qualità prima della velocità, modelli generativi provati su Google Colab con sviluppo/colab/, possibile futura modalità AI esterna opzionale senza costi ora). Se ti mando risultati_fotovettore.zip, analizzalo come descritto in 15.7.
+6. Riprendi dalla sezione 13 del documento: il primo passo è verificare la versione dev su iPhone. Chiedimi la riga "Prestazioni" da Impostazioni avanzate e gli eventuali errori dopo una conversione su https://leomastersslave.github.io/Foto_vettore/dev/, poi correggi ciò che emerge.
 
 Regole: lavora in sviluppo/src e rigenera dev/index.html; non modificare index.html senza il mio consenso; niente servizi a pagamento o API commerciali; non dichiarare test non eseguiti; distingui fatti e ipotesi; chiedimi le foto di test (non sono nel repository) e le autorizzazioni quando servono. Rispondimi in italiano.
 ```
